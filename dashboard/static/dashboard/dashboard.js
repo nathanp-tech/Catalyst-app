@@ -1,0 +1,1 @@
+console.log("Le script du tableau de bord Catalyst est chargé !");

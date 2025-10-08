@@ -1,0 +1,114 @@
+.dashboard-header {
+    margin-bottom: 2.5rem;
+    text-align: center;
+}
+.dashboard-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+.dashboard-header p {
+    font-size: 1.2rem;
+    color: #6c757d;
+}
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+.dashboard-card, .dashboard-card-list {
+    background-color: #fff;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e0e0e0;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.dashboard-card {
+    text-decoration: none;
+    color: inherit;
+}
+.dashboard-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+.dashboard-card.primary {
+    background-color: #4a90e2;
+    color: white;
+}
+.dashboard-card.primary h2, .dashboard-card.primary p {
+    color: white;
+}
+.card-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+.dashboard-card h2, .dashboard-card-list h2 {
+    font-size: 1.3rem;
+    margin: 0 0 0.5rem 0;
+}
+.dashboard-card p {
+    font-size: 0.95rem;
+    color: #6c757d;
+}
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 1rem;
+}
+.sessions-list {
+    display: grid;
+    gap: 1rem;
+}
+.session-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    border-left: 5px solid #28a745; /* Green for in-progress */
+    transition: background-color 0.2s;
+}
+.session-card:hover {
+    background-color: #e9ecef;
+}
+.session-card.completed {
+    border-left-color: #6c757d; /* Gray for completed */
+    cursor: default;
+    pointer-events: none; /* Empêche le clic sur les sessions terminées */
+    opacity: 0.7;
+}
+.session-card.completed:hover {
+    background-color: #f8f9fa;
+}
+.session-info .session-title {
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+}
+.session-info .session-date {
+    font-size: 0.85em;
+    color: #777;
+}
+.status {
+    padding: 0.4em 0.8em;
+    border-radius: 15px;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: #fff;
+}
+.status-in-progress {
+    background-color: #28a745;
+}
+.status-completed {
+    background-color: #6c757d;
+}
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: #6c757d;
+}

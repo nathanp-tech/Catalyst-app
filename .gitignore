@@ -1,0 +1,83 @@
+# ===================================================================
+# Fichiers sensibles (Secrets)
+# Ne JAMAIS stocker de clés d'API, mots de passe, etc. sur Git
+# ===================================================================
+.env
+*.env
+
+
+# ===================================================================
+# Environnement Virtuel Python
+# Le dossier qui contient toutes les bibliothèques installées
+# ===================================================================
+catalyst/
+env/
+.catalyst/
+
+
+# ===================================================================
+# Fichiers compilés et cache Python
+# Générés automatiquement par Python, inutiles à versionner
+# ===================================================================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+
+# ===================================================================
+# Base de données locale
+# La base de données de développement ne doit pas être sur Git
+# ===================================================================
+db.sqlite3
+*.sqlite3
+
+
+# ===================================================================
+# Fichiers des éditeurs de code et IDE
+# Chaque développeur a sa propre configuration locale
+# ===================================================================
+.idea/          # Pour PyCharm
+.vscode/        # Pour Visual Studio Code
+*.sublime-project
+*.sublime-workspace
+
+
+# ===================================================================
+# Fichiers générés par les outils de test
+# Rapports de couverture de test, cache, etc.
+# ===================================================================
+.pytest_cache/
+.coverage
+htmlcov/
+
+
+# ===================================================================
+# Fichiers système d'exploitation (macOS, Windows, Linux)
+# Fichiers "fantômes" créés par l'OS
+# ===================================================================
+.DS_Store
+._*
+Thumbs.db
+
+
+# ===================================================================
+# Fichiers de logs
+# Les logs sont spécifiques à une exécution, pas au projet
+# ===================================================================
+*.log
+logs/
+
+# ===================================================================
+# Environnement Conda (Anaconda/Miniconda)
+# Remplacez "nom_env" par le nom réel de votre dossier d'environnement
+# ===================================================================
+/nom_env/
+.conda/
+# Dossier de configuration Anaconda
+.anaconda/
+
+
+# Fichiers statiques et medias
+staticfiles/
+media/

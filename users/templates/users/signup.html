@@ -1,0 +1,18 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Inscription - Catalyst{% endblock %}
+
+{% block head_extra %}
+    <link rel="stylesheet" href="{% static 'users/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+<form method="post" class="auth-form">
+    <h2>Créer un compte</h2>
+    {% csrf_token %}
+    {{ form.as_p }} {# Affiche chaque champ dans un paragraphe <p> #}
+    <button type="submit">S'inscrire</button>
+    <p class="form-link">Déjà un compte ? <a href="{% url 'login' %}">Connectez-vous</a></p>
+</form>
+{% endblock %}

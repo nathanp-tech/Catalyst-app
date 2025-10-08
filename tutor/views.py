@@ -1,0 +1,308 @@
+import os
+import json
+from django.core.serializers.json import DjangoJSONEncoder
+from openai import OpenAI
+from rest_framework.reverse import reverse
+from django.shortcuts import redirect
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.views.generic import TemplateView
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_protect
+from django.utils.timezone import now
+from .models import ChatSession, ChatMessage
+from documents.models import Document  # Assurez-vous que le modèle Document est importé
+
+class TutorPageView(TemplateView):
+    """
+    Affiche la page de chat du tuteur et fournit la liste des documents disponibles.
+    """
+    template_name = "tutor/tutor.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        resume_session_id = self.request.GET.get('resume')
+        if resume_session_id:
+            # L'utilisateur veut reprendre une session spécifique
+            self.request.session['chat_session_id'] = resume_session_id
+            chat_session_id = resume_session_id
+        else:
+            # Comportement normal (reprise après rafraîchissement)
+            chat_session_id = self.request.session.get('chat_session_id')
+        
+        if chat_session_id:
+            try:
+                # Une session est en cours, on la récupère
+                session = ChatSession.objects.select_related('document').get(id=chat_session_id)
+                messages = ChatMessage.objects.filter(session=session).order_by('timestamp')
+                
+                # Reconstruire l'historique pour le front-end
+                chat_history = []
+                for msg in messages:
+                    chat_history.append({
+                        'role': msg.role,
+                        'content': msg.content
+                    })
+                
+                context['ongoing_session'] = True
+                context['chat_history_json'] = json.dumps(chat_history, cls=DjangoJSONEncoder)
+                if session.document:
+                    context['exercise_document_json'] = json.dumps({
+                        'title': session.document.title,
+                        'url': session.document.file.url
+                    })
+                
+                # CORRECTION : Recharger le contexte de l'exercice dans la session
+                # pour que les futures interactions fonctionnent.
+                self.request.session['exercise_context'] = {
+                    'question': session.question_context,
+                    'solution': session.solution_context
+                }
+
+            except ChatSession.DoesNotExist:
+                # La session n'existe plus, on nettoie
+                self.request.session.pop('chat_session_id', None)
+                context['documents'] = Document.objects.all().order_by('title')
+        else:
+            # Aucune session en cours, on affiche la liste des documents
+            context['documents'] = Document.objects.all().order_by('title')
+        return context
+
+class OpenAIAPIView(APIView):
+    """
+    Vue de base qui initialise le client OpenAI et gère la session.
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
+class TutorImageAnalysisView(OpenAIAPIView):
+    """
+    Analyse une image de question mathématique au début de l'exercice.
+    """
+    def post(self, request, *args, **kwargs):
+        document_url = request.data.get('document_url')
+        image_base64 = request.data.get('image')
+        if not image_base64:
+            return Response({"error": "Aucune image fournie."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Retrouver le document à partir de son URL
+        document = None
+        if document_url:
+            document = Document.objects.filter(file=document_url.replace('/media/', '')).first()
+
+        try:
+            # Étape 1: Extraire la question et la solution de l'image
+            extraction_prompt = {
+                "role": "system",
+                "content": "Tu es un expert en mathématiques. Extrait la question et la solution détaillée de l'image. Renvoie UNIQUEMENT un objet JSON avec les clés 'question' et 'solution'."
+            }
+            user_content = [
+                {"type": "text", "text": "Analyse cette image et extrais-en la question et la solution."},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
+            ]
+            
+            extraction_response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[extraction_prompt, {"role": "user", "content": user_content}],
+                response_format={"type": "json_object"}
+            )
+            
+            exercise_data = json.loads(extraction_response.choices[0].message.content)
+            question = exercise_data.get("question")
+            solution = exercise_data.get("solution")
+
+            if not question or not solution:
+                raise ValueError("Extraction de la question/solution échouée.")
+
+            # Étape 2: Créer une nouvelle session de chat dans la BDD
+            chat_session = ChatSession.objects.create(
+                student=request.user,
+                document=document,
+                question_context=question,
+                solution_context=solution
+            )
+            # Stocker l'ID de la session et le contexte de l'exercice dans la session Django
+            request.session['chat_session_id'] = chat_session.id
+            request.session['exercise_context'] = {'question': question, 'solution': solution}
+
+            # Étape 3: Générer le message d'accueil de l'IA
+            welcome_prompt = {
+                "role": "system",
+                "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit être un message d'accueil court et motivant pour l'inviter à commencer. Tu tutoies l'élève. Ne mentionne ni la question ni la solution."
+            }
+            
+            welcome_response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[welcome_prompt, {"role": "user", "content": "Commence la conversation."}],
+                temperature=0.5
+            )
+            
+            assistant_welcome_message = welcome_response.choices[0].message.content
+
+            # Étape 4: Sauvegarder le premier message de l'IA et le renvoyer
+            ChatMessage.objects.create(
+                session=chat_session,
+                role='assistant',
+                content=assistant_welcome_message
+            )
+            initial_history = [{"role": "assistant", "content": assistant_welcome_message}]
+
+            return Response({"initial_history": initial_history}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Erreur lors de l'analyse d'image par OpenAI: {e}")
+            return Response({"error": "Une erreur est survenue lors de l'analyse de l'image."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TutorInteractionView(OpenAIAPIView):
+    """
+    Gère une interaction avec le tuteur IA après le début de l'exercice.
+    """
+    @method_decorator(csrf_protect)
+    def post(self, request, *args, **kwargs):
+        # Récupérer les données de la session et de la requête
+        chat_session_id = request.session.get('chat_session_id')
+        exercise_context = request.session.get('exercise_context')
+        client_messages = request.data.get("messages")
+
+        if not chat_session_id or not exercise_context or not client_messages:
+            return Response({"error": "La session est invalide ou les messages sont manquants. Veuillez recommencer l'exercice."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Sauvegarder le message de l'utilisateur
+        user_message_content = client_messages[-1]['content']
+        chat_session = ChatSession.objects.get(id=chat_session_id)
+        ChatMessage.objects.create(session=chat_session, role='user', content=user_message_content)
+
+        # Réinitialiser le niveau d'indice car l'élève a soumis une nouvelle réponse
+        request.session['hint_level'] = 1
+
+        # Le prompt système qui guide le tuteur IA
+        system_prompt = f"""
+        Tu es un tuteur de mathématiques bienveillant et Socratique. Ton objectif est de guider l'élève sans jamais lui donner la réponse.
+        
+        Voici le contexte de l'exercice :
+        - La question est : "{exercise_context['question']}"
+        - La solution correcte est : "{exercise_context['solution']}"
+
+        Tes règles d'or sont :
+        1.  **Ne jamais donner la réponse directe** ou la prochaine étape.
+        2.  **Analyser la réponse de l'élève** (image et/ou texte) et identifier les erreurs ou les bonnes idées.
+        3.  **Poser des questions ouvertes** pour l'amener à réfléchir. ("Que penses-tu de cette partie ?", "Comment es-tu arrivé à ce résultat ?", "Y a-t-il une autre façon de voir les choses ?").
+        4.  **Donner des indices subtils** si l'élève est bloqué.
+        5.  **Féliciter et encourager** l'élève pour ses efforts et ses réussites.
+        6.  **Utiliser le tutoiement** et un ton amical.
+        7.  Garder tes réponses concises et focalisées sur une seule idée à la fois.
+        8.  Si l'élève semble avoir compris, demande-lui d'expliquer avec ses propres mots pour valider sa compréhension.
+        """
+        
+        # Construire la liste des messages pour l'API
+        api_messages = [{"role": "system", "content": system_prompt}] + client_messages
+
+        try:
+            completion = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=api_messages,
+                temperature=0.4,
+                max_tokens=1000
+            )
+
+            assistant_reply = completion.choices[0].message.content
+            
+            # Sauvegarder la réponse de l'assistant
+            ChatMessage.objects.create(
+                session=chat_session,
+                role='assistant',
+                content=assistant_reply
+            )
+
+            return Response({"content": assistant_reply}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Erreur lors de l'appel à OpenAI: {e}")
+            return Response({"error": "Une erreur est survenue lors de la communication avec l'IA."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TutorHintView(OpenAIAPIView):
+    """
+    Génère un indice pour l'élève en fonction du niveau de difficulté.
+    """
+    @method_decorator(csrf_protect)
+    def post(self, request, *args, **kwargs):
+        chat_session_id = request.session.get('chat_session_id')
+        exercise_context = request.session.get('exercise_context')
+        client_messages = request.data.get("messages")
+
+        if not chat_session_id or not exercise_context or not client_messages:
+            return Response({"error": "Session invalide ou messages manquants."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Gérer le niveau de l'indice. Il est réinitialisé à chaque nouvelle réponse de l'élève.
+        hint_level = request.session.get('hint_level', 1)
+        
+        level_descriptions = {
+            1: "Niveau 1 (Conceptuel) : Rappelle le grand principe mathématique en jeu sans donner d'étape. Exemple : 'Souviens-toi du théorème de Pythagore...'",
+            2: "Niveau 2 (Stratégique) : Suggère la toute première étape ou l'objectif général à atteindre, sans calcul. Exemple : 'La première chose à faire est d'isoler x.'",
+            3: "Niveau 3 (Spécifique) : Pointe vers une erreur précise dans le dernier calcul de l'élève ou donne un indice très ciblé sur la prochaine action. Exemple: 'Regarde bien la deuxième ligne de ton calcul...'"
+        }
+        
+        hint_prompt = f"""
+        Tu es un tuteur de mathématiques. L'élève a demandé un indice.
+        Contexte de l'exercice:
+        - Question: {exercise_context['question']}
+        - Solution: {exercise_context['solution']}
+
+        Voici l'historique de la conversation: {json.dumps(client_messages)}
+
+        Génère un indice de {level_descriptions.get(hint_level, level_descriptions[3])}.
+        L'indice doit être une question ouverte qui guide l'élève. Ne donne JAMAIS la réponse.
+        Adresse-toi directement à l'élève en le tutoyant.
+        """
+
+        try:
+            completion = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": hint_prompt}],
+                temperature=0.5,
+                max_tokens=200
+            )
+            hint_reply = completion.choices[0].message.content
+
+            # Sauvegarder l'indice comme un message de l'assistant
+            chat_session = ChatSession.objects.get(id=chat_session_id)
+            ChatMessage.objects.create(session=chat_session, role='assistant', content=hint_reply)
+
+            # Incrémenter le niveau d'indice pour la prochaine fois, avec un maximum de 3
+            request.session['hint_level'] = min(hint_level + 1, 3)
+
+            return Response({"content": hint_reply}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Erreur lors de la génération de l'indice: {e}")
+            return Response({"error": "Une erreur est survenue lors de la génération de l'indice."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EndSessionView(APIView):
+    """
+    Termine la session de tutorat en cours, enregistre l'heure de fin
+    et nettoie la session de l'utilisateur.
+    """
+    @method_decorator(csrf_protect)
+    def post(self, request, *args, **kwargs):
+        chat_session_id = request.session.get('chat_session_id')
+        if chat_session_id:
+            try:
+                session = ChatSession.objects.get(id=chat_session_id, student=request.user)
+                if not session.end_time:
+                    session.end_time = now() # L'heure de fin est enregistrée
+                    session.save()
+            except ChatSession.DoesNotExist:
+                pass  # La session n'existe pas, on ne fait rien.
+            
+            # Nettoie la session Django pour permettre de commencer un nouvel exercice.
+            request.session.pop('chat_session_id', None)
+            request.session.pop('exercise_context', None)
+
+        return Response({'redirect_url': reverse('dashboard')}, status=status.HTTP_200_OK)

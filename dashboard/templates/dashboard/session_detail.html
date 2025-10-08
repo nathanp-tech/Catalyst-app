@@ -1,0 +1,133 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Détail de la Session{% endblock %}
+
+{% block head_extra %}
+    <link rel="stylesheet" href="{% static 'tutor/tutor.css' %}">
+    <!-- Bibliothèques pour la génération de PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+        .chat-container { max-height: none; }
+        .tutor-container { align-items: flex-start; }
+        .session-summary {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 20px;
+        }
+        .session-summary h2 { margin-top: 0; }
+        .session-summary p { margin-bottom: 5px; }
+        .session-summary .actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        #downloadPdfBtn { font-size: 0.9rem; padding: 8px 12px; }
+        .notes-form { margin-top: 20px; }
+        .notes-form textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="tutor-container" style="max-width: 900px; margin: auto;">
+    <div style="width: 100%;">
+        <div class="session-summary">
+            <h2>Détail de la conversation</h2>
+            <p><strong>Élève:</strong> {{ session.student.username }}</p>
+            <p><strong>Document:</strong> {{ session.document.title|default:"N/A" }}</p>
+            <p><strong>Date:</strong> {{ session.start_time|date:"d F Y, H:i" }}</p>
+            <div class="actions">
+                <a href="{% url 'session-list' %}">&larr; Retour à la liste des sessions</a>
+                <button id="downloadPdfBtn" class="validate-btn" style="background-color: var(--secondary-color);"><i class="fas fa-file-pdf"></i> Télécharger en PDF</button>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div id="chatbox">
+                {% for message in session.messages.all %}
+                    <div class="chat-message {% if message.role == 'assistant' %}tutor{% else %}user{% endif %}">
+                        {% if message.role == 'assistant' %}
+                            {{ message.content|safe }}
+                        {% else %}
+                            {% for item in message.content %}
+                                {% if item.type == 'text' %}
+                                    <div class="comment-text">{{ item.text }}</div>
+                                {% elif item.type == 'image_url' %}
+                                    <img src="{{ item.image_url.url }}" alt="Réponse de l'élève">
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="session-summary notes-form">
+            <h3>Notes du professeur (privées)</h3>
+            <form method="post">
+                {% csrf_token %}
+                <textarea name="teacher_notes" placeholder="Ajoutez vos notes sur cette session...">{{ session.teacher_notes }}</textarea>
+                <button type="submit" class="validate-btn" style="margin-top: 10px;">Enregistrer les notes</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.addEventListener('load', () => {
+        // Pour le rendu correct des maths si MathJax est utilisé
+        if (window.MathJax) {
+            MathJax.typesetPromise();
+        }
+
+        // --- Logique de téléchargement PDF ---
+        const downloadBtn = document.getElementById('downloadPdfBtn');
+        const chatboxToCapture = document.getElementById('chatbox');
+        const summaryToCapture = document.querySelector('.session-summary');
+
+        downloadBtn.addEventListener('click', () => {
+            const originalBtnText = downloadBtn.innerHTML;
+            downloadBtn.innerHTML = `<div class="spinner" style="border-top-color: white; width: 16px; height: 16px;"></div> Génération...`;
+            downloadBtn.disabled = true;
+
+            // Utiliser html2canvas pour capturer le contenu du chat
+            html2canvas(chatboxToCapture, { 
+                scale: 2, // Augmenter l'échelle pour une meilleure qualité d'image
+                useCORS: true 
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: 'a4'
+                });
+
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+                const ratio = imgWidth / imgHeight;
+                
+                const imgHeightInPdf = pdfWidth / ratio;
+
+                pdf.text(`Conversation de: {{ session.student.username }} - {{ session.start_time|date:"d/m/Y" }}`, 10, 15);
+                pdf.addImage(imgData, 'PNG', 10, 25, pdfWidth - 20, imgHeightInPdf);
+                pdf.save(`conversation-{{ session.student.username|slugify }}-{{ session.id }}.pdf`);
+
+                downloadBtn.innerHTML = originalBtnText;
+                downloadBtn.disabled = false;
+            });
+        });
+    });
+</script>
+{% endblock %}

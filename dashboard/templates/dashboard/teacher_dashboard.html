@@ -1,0 +1,84 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Tableau de bord Professeur{% endblock %}
+
+{% block head_extra %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Tableau de bord Professeur</h1>
+    <p>Gérez vos classes et suivez la progression de vos élèves.</p>
+</div>
+
+<div class="dashboard-section">
+    <h2 class="section-title">Suivi des Élèves</h2>
+    <div class="dashboard-grid">
+        <a href="{% url 'session-list' %}" class="dashboard-card primary">
+            <div class="card-icon">📊</div>
+            <h2>Sessions de Tutorat</h2>
+            <p>Consultez les conversations individuelles de vos élèves avec le tuteur IA.</p>
+        </a>
+        <a href="{% url 'class-dashboard' %}" class="dashboard-card">
+            <div class="card-icon">🧑‍🏫</div>
+            <h2>Tableau de Bord Classe</h2>
+            <p>Suivez la performance globale de chaque élève par exercice.</p>
+        </a>
+    </div>
+</div>
+
+<div class="dashboard-section">
+    <h2 class="section-title">Gestion du Contenu et des Classes</h2>
+    <div class="dashboard-grid">
+        <a href="{% url 'manage-classes' %}" class="dashboard-card">
+            <div class="card-icon">👥</div>
+            <h2>Gestion des Classes</h2>
+            <p>Ajoutez, modifiez ou supprimez des élèves et des groupes.</p>
+        </a>
+        <a href="{% url 'document-upload' %}" class="dashboard-card">
+            <div class="card-icon">📄</div>
+            <h2>Upload Documents</h2>
+            <p>Ajoutez de nouveaux documents PDF pour vos classes.</p>
+        </a>
+    </div>
+</div>
+
+<div class="dashboard-section">
+    <div class="dashboard-card-list">
+        <div class="card-header">
+            <div class="card-icon">📂</div>
+            <h2>Mes documents uploadés</h2>
+        </div>
+        <div class="document-list">
+            {% for doc in documents %}
+                <a href="{{ doc.file.url }}" target="_blank" class="document-item">
+                    <span>{{ doc.title }}</span>
+                    <small>Ajouté le {{ doc.uploaded_at|date:"d/m/Y" }}</small>
+                </a>
+            {% empty %}
+                <p class="empty-list">Vous n'avez uploadé aucun document pour le moment.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .dashboard-section {
+        margin-bottom: 3rem;
+    }
+    .section-title {
+        font-size: 1.8rem;
+        color: var(--header-color);
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid var(--primary-color);
+        display: inline-block;
+    }
+    .dashboard-card-list {
+        grid-column: 1 / -1; /* S'assure que la liste prend toute la largeur */
+    }
+</style>
+{% endblock %}

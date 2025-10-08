@@ -1,0 +1,9 @@
+.auth-form { max-width: 500px; margin: 40px auto; padding: 20px; background: var(--card-bg); border-radius: var(--border-radius); box-shadow: var(--shadow); }
+.auth-form h2 { text-align: center; color: var(--primary-color); margin-bottom: 20px; }
+.auth-form label { display: block; margin-bottom: 5px; font-weight: 600; }
+.auth-form input { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box; }
+.auth-form button { width: 100%; padding: 12px; }
+.auth-form .helptext { font-size: 0.8rem; color: #6c757d; margin-top: -10px; margin-bottom: 10px; }
+.auth-form .errorlist { color: #dc3545; list-style: none; padding: 0; margin-bottom: 15px; font-size: 0.9rem; }
+.auth-form p { margin-bottom: 1rem; }
+.auth-form .form-link { text-align: center; margin-top: 20px; }

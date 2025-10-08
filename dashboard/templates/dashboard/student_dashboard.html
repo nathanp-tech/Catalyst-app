@@ -1,0 +1,80 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Tableau de bord Élève{% endblock %}
+
+{% block head_extra %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Bonjour, {{ user.username }} !</h1>
+    <p>Prêt à apprendre quelque chose de nouveau aujourd'hui ?</p>
+</div>
+
+<div class="dashboard-grid">
+    <a href="{% url 'tutor-page' %}" class="dashboard-card primary">
+        <div class="card-icon">🧠</div>
+        <h2>Démarrer avec le Tuteur IA</h2>
+        <p>Posez une question, explorez un nouveau sujet ou entraînez-vous.</p>
+    </a>
+
+    <a href="#" class="dashboard-card">
+        <div class="card-icon">📈</div>
+        <h2>Ma Progression</h2>
+        <p>Visualisez vos statistiques et vos derniers résultats de quiz.</p>
+    </a>
+
+    <a href="#" class="dashboard-card">
+        <div class="card-icon">📚</div>
+        <h2>Reprendre la dernière leçon</h2>
+        <p>Continuez là où vous vous êtes arrêté sur le "Machine Learning".</p>
+    </a>
+
+    <div class="dashboard-card-list" style="grid-column: 1 / -1;">
+        <div class="card-header">
+            <div class="card-icon">⏳</div>
+            <h2>Mes sessions récentes</h2>
+        </div>
+        <div class="document-list">
+            {% for session in sessions %}
+                <div class="document-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
+                    <div>
+                        <span>Session sur: <strong>{{ session.document.title|default:"Exercice personnalisé" }}</strong></span>
+                        <br>
+                        <small>Commencée le {{ session.start_time|date:"d/m/Y à H:i" }}</small>
+                    </div>
+                    <a href="{% url 'tutor-page' %}?resume={{ session.id }}" class="validate-btn" style="padding: 8px 12px; text-decoration: none; background-color: var(--secondary-color);">Continuer</a>
+                </div>
+            {% empty %}
+                <p class="empty-list">Vous n'avez aucune session enregistrée.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="dashboard-card-list">
+        <div class="card-header">
+            <div class="card-icon">📚</div>
+            <h2>Documents du cours</h2>
+        </div>
+        <div class="document-list">
+            {% for doc in documents %}
+                <a href="{{ doc.file.url }}" target="_blank" class="document-item">
+                    <span>{{ doc.title }}</span>
+                    <small>Ajouté le {{ doc.uploaded_at|date:"d/m/Y" }}</small>
+                </a>
+            {% empty %}
+                <p class="empty-list">Aucun document disponible pour le moment.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <a href="#" class="dashboard-card">
+        <div class="card-icon">⚙️</div>
+        <h2>Mon Compte</h2>
+        <p>Gérez vos informations personnelles et vos préférences.</p>
+    </a>
+</div>
+{% endblock %}

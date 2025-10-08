@@ -1,0 +1,77 @@
+{% extends "core/base.html" %}
+{% load static %}
+{% load dashboard_extras %}
+
+{% block title %}Tableau de Bord de la Classe{% endblock %}
+
+{% block head_extra %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+    <link rel="stylesheet" href="{% static 'dashboard/class_dashboard.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1><i class="fas fa-chalkboard-teacher"></i> Tableau de Bord de la Classe</h1>
+    <p>Suivez la progression de vos élèves en sélectionnant une classe et un exercice.</p>
+</div>
+
+<div class="filters-container">
+    <form method="get" class="filter-form">
+        <div class="filter-group">
+            <label for="group-select"><i class="fas fa-users"></i> Classe :</label>
+            <select name="group" id="group-select" onchange="this.form.submit()">
+                <option value="">Sélectionnez une classe</option>
+                {% for class in all_classes %}
+                    <option value="{{ class.id }}" {% if selected_group_id == class.id|stringformat:"s" %}selected{% endif %}>{{ class.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="document-select"><i class="fas fa-book-open"></i> Exercice :</label>
+            <select name="document" id="document-select" onchange="this.form.submit()">
+                <option value="">Tous les exercices</option>
+                {% for doc in all_documents %}
+                    <option value="{{ doc.id }}" {% if selected_document_id == doc.id|stringformat:"s" %}selected{% endif %}>{{ doc.title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</div>
+
+{% if selected_group %}
+    <div class="results-header">
+        <h2>Classe : {{ selected_group.name }}</h2>
+    </div>
+    <div class="student-grid" id="student-grid-container">
+        {% for data in student_performance %}
+            <div class="student-card" 
+                 data-student-name="{{ data.student.first_name|default:data.student.username }}"
+                 data-student-id="{{ data.student_id }}"
+                 data-performance='{{ data.performance_data|jsonify }}'>
+                <div class="student-avatar">{{ data.student.username|first|upper }}</div>
+                <p class="student-name">{{ data.student.first_name|default:data.student.username }}</p>
+            </div>
+        {% empty %}
+            <p class="empty-state">Aucun élève trouvé dans cette classe.</p>
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="empty-state"><i class="fas fa-info-circle"></i> Veuillez sélectionner une classe pour commencer.</p>
+{% endif %}
+
+<div id="studentModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2 id="modal-student-name"></h2>
+        <div id="modal-performance-details"></div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'dashboard/class_dashboard.js' %}"></script>
+{% endblock %}

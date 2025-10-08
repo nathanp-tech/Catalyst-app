@@ -1,0 +1,371 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Sessions de Tutorat{% endblock %}
+
+{% block head_extra %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+    <link rel="stylesheet" href="{% static 'tutor/tutor.css' %}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Bibliothèques pour la génération de PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+        .session-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .session-table th, .session-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        .session-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        .session-table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .session-table tr:hover {
+            background-color: #e9ecef;
+        }
+        .session-table a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .action-icons {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .download-icon {
+            cursor: pointer;
+            color: var(--accent-color);
+            font-size: 1.4rem;
+            text-align: center;
+        }
+        .summary-icon {
+            cursor: pointer;
+            color: var(--secondary-color);
+            font-size: 1.4rem;
+            margin-left: 15px;
+        }
+        .download-icon:hover, .summary-icon:hover {
+            transform: scale(1.1);
+        }
+        .download-icon .spinner {
+            border-top-color: var(--primary-color);
+            margin: auto;
+        }
+        /* Styles pour la modale de résumé */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 10% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 700px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .close-button {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #summary-content ul {
+            list-style-type: disc;
+            padding-left: 20px;
+        }
+        .filter-container {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            background-color: var(--card-bg);
+            padding: 15px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 20px;
+        }
+        .filter-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-grow: 1;
+        }
+        .filter-wrapper i {
+            color: #888;
+        }
+        .filter-wrapper input[type="text"], .filter-wrapper select {
+            flex-grow: 1;
+            border: 1px solid #ccc;
+            padding: 10px; /* Augmente la hauteur */
+            font-size: 1rem; /* Augmente la taille de la police */
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Sessions de Tutorat</h1>
+    <p>Voici la liste de toutes les conversations des élèves avec le tuteur IA.</p>
+</div>
+
+<div class="filter-container">
+    <form method="get" action="{% url 'session-list' %}" style="display: contents;">
+        <div class="filter-wrapper">
+            <i class="fas fa-file-alt"></i>
+            <select name="document_id" onchange="this.form.submit()">
+                <option value="">Tous les documents</option>
+                {% for doc in all_documents %}
+                    <option value="{{ doc.id }}" {% if filtered_document_id == doc.id|stringformat:"s" %}selected{% endif %}>
+                        {{ doc.title }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-wrapper">
+            <i class="fas fa-user-graduate"></i>
+            <select name="student_id" onchange="this.form.submit()">
+                <option value="">Tous les élèves</option>
+                {% for student in all_students %}
+                    <option value="{{ student.id }}" {% if filtered_student_id == student.id|stringformat:"s" %}selected{% endif %}>
+                        {{ student.username }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="validate-btn">Filtrer</button>
+        {% if filtered_document_id or filtered_student_id %}
+            <a href="{% url 'session-list' %}" class="clear-search-btn" title="Effacer les filtres">
+                <i class="fas fa-times"></i>
+            </a>
+        {% endif %}
+    </form>
+</div>
+
+<div class="dashboard-card-list" style="grid-column: 1 / -1;">
+    <table class="session-table">
+        <thead>
+            <tr>
+                <th>Élève</th>
+                <th>Document</th>
+                <th>Date de début</th>
+                <th>Nombre de messages</th>
+                <th style="text-align: center;">Actions</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for session in sessions %}
+            <tr>
+                <td>{{ session.student.username }}</td>
+                <td>{{ session.document.title|default:"N/A" }}</td>
+                <td>{{ session.start_time|date:"d/m/Y H:i" }}</td>
+                <td style="text-align: center;">{{ session.messages.count }}</td>                
+                <td class="action-icons">
+                    <div class="download-icon" 
+                         data-session-id="{{ session.id }}" 
+                         data-student-slug="{{ session.student.username|slugify }}"
+                         title="Télécharger en PDF">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                    <div class="summary-icon" data-session-id="{{ session.id }}" title="Générer un résumé IA">
+                        <i class="fas fa-wand-magic-sparkles"></i>
+                    </div>
+                </td>
+                <td><a href="{% url 'session-detail' session.id %}">Voir la conversation</a></td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 20px;">Aucune session de tutorat pour le moment.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Conteneur temporaire pour le rendu du PDF -->
+<div id="pdf-render-container" style="position: absolute; left: -9999px; top: -9999px; width: 800px;"></div>
+
+<!-- Modale pour le résumé IA -->
+<div id="summaryModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="summary-modal-title">Résumé de la session</h2>
+            <span class="close-button">&times;</span>
+        </div>
+        <div id="summary-content">
+            <!-- Le contenu du résumé sera injecté ici -->
+        </div>
+    </div>
+</div>
+
+<script>
+    // Attacher les événements de clic après le chargement de la page
+    document.addEventListener('DOMContentLoaded', () => {
+        // Logique pour le téléchargement en PDF
+        const downloadIcons = document.querySelectorAll('.download-icon');
+        downloadIcons.forEach(iconCell => {
+            iconCell.addEventListener('click', (event) => {
+                const iconContainer = event.currentTarget;
+                const { sessionId, studentSlug } = iconContainer.dataset;
+                downloadSessionPDF(iconContainer.querySelector('i'), sessionId, studentSlug);
+            });
+        });
+
+        // Logique pour la modale de résumé
+        const summaryIcons = document.querySelectorAll('.summary-icon');
+        const modal = document.getElementById('summaryModal');
+        const closeButton = modal.querySelector('.close-button');
+        const summaryContent = document.getElementById('summary-content');
+
+        summaryIcons.forEach(icon => {
+            icon.addEventListener('click', async (event) => {
+                const sessionId = event.currentTarget.dataset.sessionId;
+                modal.style.display = 'block';
+                summaryContent.innerHTML = '<div class="spinner" style="margin: 20px auto;"></div><p style="text-align: center;">Génération du résumé en cours...</p>';
+
+                try {
+                    const response = await fetch(`/dashboard/api/sessions/${sessionId}/summary/`);
+                    const data = await response.json();
+
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    let contentHtml = `<h3>Analyse des erreurs</h3>`;
+                    if (data.error_analysis && Object.keys(data.error_analysis).length > 0) {
+                        contentHtml += '<ul>';
+                        for (const [error, count] of Object.entries(data.error_analysis)) {
+                            contentHtml += `<li><strong>${error}:</strong> ${count}</li>`;
+                        }
+                        contentHtml += '</ul>';
+                    } else {
+                        contentHtml += '<p>Aucune erreur spécifique identifiée.</p>';
+                    }
+
+                    contentHtml += `<h3 style="margin-top: 20px;">Résumé de la progression</h3><p>${data.summary_text || "Aucun résumé textuel disponible."}</p>`;
+                    summaryContent.innerHTML = contentHtml;
+
+                } catch (error) {
+                    summaryContent.innerHTML = `<p style="color: red;">Erreur: ${error.message}</p>`;
+                }
+            });
+        });
+
+        // Fermeture de la modale
+        closeButton.onclick = () => {
+            modal.style.display = "none";
+        };
+
+        window.onclick = (event) => {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        };
+    }); // Parenthèse corrigée ici
+
+    /**
+     * Génère et télécharge un PDF de la session de chat.
+     * @param {HTMLElement} iconElement - L'icône sur laquelle l'utilisateur a cliqué.
+     * @param {string} sessionId - L'ID de la session.
+     * @param {string} studentSlug - Le nom de l'étudiant pour le nom du fichier.
+     */
+    async function downloadSessionPDF(iconElement, sessionId, studentSlug) {
+        const originalIconClass = iconElement.className;
+        iconElement.className = 'spinner'; // Affiche un spinner
+
+        try {
+            // 1. Récupérer le contenu HTML du chat
+            const response = await fetch(`/dashboard/api/sessions/${sessionId}/content/`);
+            if (!response.ok) {
+                throw new Error(`Erreur réseau: ${response.statusText}`);
+            }
+            const data = await response.json();
+
+            // 2. Placer ce contenu dans un conteneur temporaire pour le rendu
+            const renderContainer = document.getElementById('pdf-render-container');
+            renderContainer.innerHTML = `<div id="chatbox">${data.html}</div>`;
+
+            // Attendre que les images (si présentes) soient chargées
+            const images = renderContainer.querySelectorAll('img');
+            await Promise.all(Array.from(images).map(img => {
+                if (img.complete) return Promise.resolve();
+                return new Promise(resolve => { img.onload = img.onerror = resolve; });
+            }));
+            
+            const chatboxElement = renderContainer.querySelector('#chatbox');
+            if (!chatboxElement) {
+                throw new Error("L'élément à capturer pour le PDF est introuvable.");
+            }
+
+            // 3. Utiliser html2canvas pour capturer le conteneur
+            const canvas = await html2canvas(chatboxElement, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff'
+            });
+
+            // 4. Créer le PDF avec jsPDF
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+            
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            // Ajoute le contenu page par page
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft > 0) {
+                position -= pageHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            // 5. Sauvegarder le fichier
+            pdf.save(`conversation-${studentSlug}-${sessionId}.pdf`);
+
+        } catch (error) {
+            console.error("Erreur lors de la génération du PDF:", error);
+            alert("Une erreur est survenue lors de la création du PDF.");
+        } finally {
+            // 6. Nettoyer et restaurer l'icône
+            document.getElementById('pdf-render-container').innerHTML = '';
+            iconElement.className = originalIconClass;
+        }
+    }
+</script>
+{% endblock %}

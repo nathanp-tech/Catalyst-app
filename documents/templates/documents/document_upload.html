@@ -1,0 +1,145 @@
+{% extends "core/base.html" %}
+{% load static %}
+ 
+{% block title %}Uploader un Document{% endblock %}
+ 
+{% block head_extra %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'users/auth.css' %}">
+    <style>
+        .auth-form {
+            max-width: 600px;
+        }
+        .form-field-wrapper {
+            margin-bottom: 1.5rem;
+        }
+        .form-field-wrapper label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-field-wrapper input[type="text"],
+        .form-field-wrapper input[type="file"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        /* Style pour les erreurs de validation */
+        .form-field-wrapper .errorlist {
+            color: #e74c3c;
+            list-style-type: none;
+            padding: 0;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        #file-chosen {
+            margin-top: 8px;
+            display: inline-block;
+            font-style: italic;
+            color: #555;
+        }
+        #upload-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1rem;
+        }
+        #upload-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        /* Loader pour le retour visuel */
+        .loader {
+            display: none; /* Caché par défaut */
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+{% endblock %}
+ 
+{% block content %}
+<form id="upload-form" method="post" enctype="multipart/form-data" class="auth-form">
+    <h2>Uploader un nouveau document</h2>
+    <p>Le document sera accessible à tous les élèves depuis l'interface du tuteur.</p>
+    
+    {% csrf_token %}
+ 
+    <div class="form-field-wrapper">
+        <label for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>
+        {{ form.title }}
+        {{ form.title.errors }}
+    </div>
+ 
+    <div class="form-field-wrapper">
+        <label for="{{ form.file.id_for_label }}">{{ form.file.label }}</label>
+        {{ form.file }}
+        <span id="file-chosen">Aucun fichier choisi</span>
+        {{ form.file.errors }}
+    </div>
+ 
+    <button id="upload-btn" type="submit" disabled>
+        <div class="loader" id="loader"></div>
+        <span id="btn-text">Uploader</span>
+    </button>
+</form>
+ 
+<script>
+    const fileInput = document.getElementById('{{ form.file.id_for_label }}');
+    const fileChosenSpan = document.getElementById('file-chosen');
+    const uploadBtn = document.getElementById('upload-btn');
+    const uploadForm = document.getElementById('upload-form');
+    const loader = document.getElementById('loader');
+    const btnText = document.getElementById('btn-text');
+    const MAX_SIZE_MB = 10;
+ 
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            const file = this.files[0];
+            const fileSizeMB = file.size / 1024 / 1024; // Taille en Mo
+ 
+            // Validation côté client pour un retour rapide
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                fileChosenSpan.textContent = 'Erreur : Le fichier doit être un PDF.';
+                fileChosenSpan.style.color = '#e74c3c';
+                uploadBtn.disabled = true;
+            } else if (fileSizeMB > MAX_SIZE_MB) {
+                fileChosenSpan.textContent = `Erreur : Fichier trop lourd (> ${MAX_SIZE_MB}Mo)`;
+                fileChosenSpan.style.color = '#e74c3c';
+                uploadBtn.disabled = true;
+            } else {
+                fileChosenSpan.textContent = file.name;
+                fileChosenSpan.style.color = '#555';
+                uploadBtn.disabled = false;
+            }
+        } else {
+            fileChosenSpan.textContent = 'Aucun fichier choisi';
+            uploadBtn.disabled = true;
+        }
+    });
+ 
+    // Affiche un message de chargement lors de la soumission
+    uploadForm.addEventListener('submit', function() {
+        // Vérifie une dernière fois si le bouton est activé
+        if (!uploadBtn.disabled) {
+            uploadBtn.disabled = true;
+            loader.style.display = 'inline-block';
+            btnText.textContent = 'Envoi en cours...';
+        }
+    });
+</script>
+{% endblock %}

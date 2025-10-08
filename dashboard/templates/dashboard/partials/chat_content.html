@@ -1,0 +1,17 @@
+{% for message in session.messages.all %}
+    <div class="chat-message {% if message.role == 'assistant' %}tutor{% else %}user{% endif %}">
+        {% if message.role == 'assistant' %}
+            {# Le contenu de l'assistant est déjà du HTML sûr #}
+            {{ message.content|safe }}
+        {% else %}
+            {# Le contenu de l'utilisateur est un JSON, il faut le parcourir #}
+            {% for item in message.content %}
+                {% if item.type == 'text' and item.text %}
+                    <div class="comment-text">{{ item.text }}</div>
+                {% elif item.type == 'image_url' %}
+                    <img src="{{ item.image_url.url }}" alt="Réponse de l'élève" crossOrigin="anonymous">
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    </div>
+{% endfor %}

@@ -1,0 +1,40 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Tableau de Bord - Catalyst{% endblock %}
+
+{% block head_extra %}
+    <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>{{ welcome_message }}</h1>
+    {% if user_type == 'student' %}
+    <a href="{% url 'tutor-page' %}" class="cta-button">Commencer le tutorat</a>
+    {% endif %}
+</div>
+
+{% if user_type == 'teacher' %}
+<div class="dashboard-grid">
+    <div class="card">
+        <h3>Statistiques</h3>
+        <p>Nombre total d'élèves : <strong>{{ students_count }}</strong></p>
+    </div>
+    <div class="card">
+        <h3>Activité Récente</h3>
+        <ul class="activity-list">
+            {% for activity in recent_activity %}
+            <li><span>{{ activity.student }}</span> a travaillé sur : <span>{{ activity.exercise }}</span></li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% elif user_type == 'student' %}
+<div class="card">
+    <h3>Ma Progression</h3>
+    <p>Exercice en cours : <strong>{{ current_exercise }}</strong></p>
+    <p>Progression : <strong>{{ progress }}</strong></p>
+</div>
+{% endif %}
+{% endblock %}
