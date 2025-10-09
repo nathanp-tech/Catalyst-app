@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const nextPageBtn = document.getElementById('nextPageBtn');
     const pageIndicator = document.getElementById('pageIndicator');
     const startOnPageBtn = document.getElementById('startOnPageBtn');
+    
 
     // --- VARIABLES D'ÉTAT ---
     let chatHistory = [];
