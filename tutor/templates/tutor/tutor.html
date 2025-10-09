@@ -5,59 +5,12 @@
 
 {% block head_extra %}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
-    <script src="https://unpkg.com/perfect-freehand@1.2.0/dist/perfect-freehand.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
     <link rel="stylesheet" href="{% static 'tutor/tutor.css' %}">
-    <style>
-        #hintBtn {
-            font-size: 1.5rem;
-            padding: 0 15px;
-            background-color: #ffc107; /* Jaune pour l'idée */
-            color: #333;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            margin-right: 10px; /* Espace entre le bouton indice et la zone de texte */
-        }
-        #hintBtn:hover {
-            background-color: #ffca2c;
-        }
-        #hintBtn:disabled {
-            background-color: #e0e0e0;
-            cursor: not-allowed;
-        }
-        /* Réduire la taille initiale du whiteboard */
-        .whiteboard-workspace {
-            flex-grow: 1; /* Permet au chat de prendre plus de place */
-            min-height: 350px; /* Hauteur minimale pour le dessin */
-        }
-        .input-area {
-            flex-shrink: 0; /* Empêche la zone de saisie de rétrécir */
-        }
-
-        /* Styles pour le mode plein écran */
-        .whiteboard-workspace.fullscreen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 2000;
-            background-color: var(--bg-color);
-            padding: 1rem;
-            margin: 0;
-            border-radius: 0;
-        }
-        /* Empêche le scroll de la page quand le whiteboard est en plein écran */
-        body.no-scroll {
-            overflow: hidden;
-            /* Empêche le "bounce" sur iOS/iPadOS */
-            position: fixed; 
-            width: 100%;
-        }
-    </style>
 {% endblock %}
 
 {% block content %}
@@ -74,7 +27,7 @@
                         <option value="{{ doc.file.url }}">{{ doc.title }}</option>
                     {% endfor %}
                 </select>
-                <button id="startExerciseBtn" class="validate-btn" onclick="startExercise()" disabled>
+                <button id="startExerciseBtn" class="validate-btn" disabled>
                     <i class="fas fa-play"></i> Commencer
                 </button>
             </div>
@@ -104,11 +57,16 @@
                 <div id="questionImageContainer">
                     <img id="questionImageDisplay" src="" alt="Question de mathématiques">
                 </div>
+                <div id="pdfNavControls" class="hidden">
+                    <button id="prevPageBtn">&lt; Précédent</button>
+                    <span id="pageIndicator"></span>
+                    <button id="nextPageBtn">Suivant &gt;</button>
+                    <button id="startOnPageBtn" class="validate-btn">Commencer sur cette page</button>
+                </div>
             </div>
             
             <div class="chat-container">
-                <div id="chatbox">
-                    </div>
+                <div id="chatbox"></div>
             </div>
         </div>
 
@@ -116,41 +74,31 @@
             <div class="whiteboard-workspace">
                 <div class="toolbar">
                     <div class="tool-group">
-                        <button id="penTool" class="tool active" onclick="setTool('pen')" title="Stylo"><i class="fas fa-pen"></i></button>
-                        <button id="eraserTool" class="tool" onclick="setTool('eraser')" title="Gomme"><i class="fas fa-eraser"></i></button>
+                        <button id="penTool" class="tool active" title="Stylo"><i class="fas fa-pen"></i></button>
+                        <button id="eraserTool" class="tool" title="Gomme"><i class="fas fa-eraser"></i></button>
                     </div>
                     <div class="tool-divider"></div>
                     <div class="tool-group">
-                        <input type="color" id="color" value="#000000" title="Couleur">
+                        <input type="color" id="colorPicker" value="#000000" title="Couleur">
                     </div>
                     <div class="tool-divider"></div>
                     <div class="tool-group thickness-group">
-                        <i class="fas fa-pen-nib"></i>
-                        <input type="range" id="size" min="1" max="20" value="3" title="Épaisseur">
+                        <i id="thickness-icon" class="fas fa-pen-nib"></i>
+                        <input type="range" id="sizeSlider" min="1" max="50" value="5" title="Épaisseur">
                     </div>
                     <div class="tool-divider"></div>
-                    <div class="tool-group">
-                        <button class="tool" onclick="changeZoom(-0.1)" title="Zoom arrière"><i class="fas fa-search-minus"></i></button>
-                        <span id="zoomPercent">100%</span>
-                        <button class="tool" onclick="changeZoom(0.1)" title="Zoom avant"><i class="fas fa-search-plus"></i></button>
-                    </div>
-                    <div class="tool-divider"></div>
-                    <button id="fullscreenBtn" class="tool" title="Plein écran"><i class="fas fa-expand-arrows-alt"></i></button>
-                    <div class="tool-divider"></div>
-                    <button class="tool clear-btn" onclick="clearCanvas()" title="Effacer tout"><i class="fas fa-trash-alt"></i></button>
+                    <button id="clearCanvasBtn" class="tool clear-btn" title="Effacer tout"><i class="fas fa-trash-alt"></i></button>
                 </div>
                 
-                <div class="whiteboard-container" id="whiteboardContainer">
-                    <div class="whiteboard-scroll-container" id="scrollContainer">
-                        <canvas id="whiteboard"></canvas>
-                    </div>
+                <div id="canvas-container">
+                    <canvas id="whiteboard"></canvas>
                 </div>
             </div>
 
             <div class="input-area">
                 <button id="hintBtn" title="Demander un indice" disabled>💡</button>
                 <textarea id="textInput" placeholder="Écris ta réponse ou pose une question..."></textarea>
-                <button id="sendBtn" onclick="sendToTutor()" disabled>
+                <button id="sendBtn" disabled>
                     <span id="sendBtnText">Envoyer</span>
                     <i class="fas fa-paper-plane"></i>
                 </button>
@@ -161,15 +109,15 @@
 </div>
 
 <script>
-    // URLs for API calls
-    const analyzeImageUrl = "{% url 'tutor-analyze-image' %}";
-    const endSessionUrl = "{% url 'tutor-end-session' %}";
-    const tutorInteractUrl = "{% url 'tutor-interact' %}";
-    const csrfToken = "{{ csrf_token }}";
-
+    window.APP_CONFIG = {
+        analyzeImageUrl: "{% url 'tutor-analyze-image' %}",
+        endSessionUrl: "{% url 'tutor-end-session' %}",
+        tutorInteractUrl: "{% url 'tutor-interact' %}",
+        getHintUrl: "{% url 'tutor-get-hint' %}",
+        csrfToken: "{{ csrf_token }}"
+    };
 </script>
 
-<!-- Données de session pour JavaScript, dans un format sûr -->
 <script id="session-data" type="application/json">
     {
         "ongoing_session": {{ ongoing_session|default:False|yesno:"true,false" }},
@@ -177,11 +125,6 @@
         "exercise_document": {{ exercise_document_json|default:"null"|safe }}
     }
 </script>
-<script>
-   
-    const getHintUrl = "{% url 'tutor-get-hint' %}";
-</script>
 
-
-<script src="{% static 'tutor/tutor.js' %}"></script>
+<script src="{% static 'tutor/tutor.js' %}" defer></script>
 {% endblock %}
