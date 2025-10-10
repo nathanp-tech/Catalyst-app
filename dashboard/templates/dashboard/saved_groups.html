@@ -1,0 +1,104 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Groupes Enregistrés{% endblock %}
+
+{% block head_extra %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        .filters-container {
+            background-color: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 2rem;
+            max-width: 600px;
+        }
+        .filter-form {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-grow: 1;
+        }
+        .filter-group label {
+            font-weight: 600;
+            color: var(--header-color);
+        }
+        .filter-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            font-size: 1rem;
+        }
+        .saved-groups-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .saved-group-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--card-shadow);
+        }
+        .saved-group-card h4 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+        .saved-group-card small {
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+            display: block;
+        }
+        .group-display .group-pod {
+            background-color: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1><i class="fas fa-layer-group"></i> Groupes Enregistrés</h1>
+    <p>Consultez les configurations de groupes que vous avez créées.</p>
+</div>
+
+<div class="filters-container">
+    <form method="get" class="filter-form">
+        <div class="filter-group">
+            <label for="class-select"><i class="fas fa-users"></i> Classe :</label>
+            <select name="class_id" id="class-select" onchange="this.form.submit()">
+                <option value="">Sélectionnez une classe</option>
+                {% for class in all_classes %}
+                    <option value="{{ class.id }}" {% if selected_class_id == class.id|stringformat:"s" %}selected{% endif %}>{{ class.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</div>
+
+{% if selected_class %}
+    <div class="saved-groups-grid">
+        {% for group_config in saved_groups %}
+            {% include 'dashboard/partials/saved_group_card.html' %}
+        {% empty %}
+            <p>Aucune configuration de groupe n'a été enregistrée pour la classe "{{ selected_class.name }}".</p>
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="empty-state"><i class="fas fa-info-circle"></i> Veuillez sélectionner une classe pour voir les groupes enregistrés.</p>
+{% endif %}
+
+{% endblock %}

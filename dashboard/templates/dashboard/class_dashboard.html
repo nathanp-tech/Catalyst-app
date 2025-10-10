@@ -10,6 +10,302 @@
     <link rel="stylesheet" href="{% static 'dashboard/class_dashboard.css' %}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --card-bg: #ffffff;
+            --card-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+            --card-hover-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            --border-color: #e9ecef;
+            --text-muted: #6c757d;
+            --primary-light: #eef5ff;
+        }
+
+        .filters-container {
+            background-color: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            margin-bottom: 2rem;
+        }
+
+        .filter-form {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-grow: 1;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            color: var(--header-color);
+        }
+
+        .filter-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background-color: #f8f9fa;
+            font-family: 'Poppins', sans-serif;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .filter-group select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
+        }
+
+        .student-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .student-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+        }
+
+        .student-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--card-hover-shadow);
+        }
+
+        .student-card-header {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .student-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-right: 1rem;
+        }
+
+        .student-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--header-color);
+        }
+
+        [class*="error-continuum-"] {
+            width: var(--width, 0%);
+        }
+
+        .error-continuum {
+            display: flex;
+            width: 100%;
+            height: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 0.5rem 0;
+        }
+        .error-continuum-calcul { background-color: #3498db; }
+        .error-continuum-substitution { background-color: #f1c40f; }
+        .error-continuum-procedure { background-color: #e74c3c; }
+        .error-continuum-conceptuelle { background-color: #9b59b6; }
+
+        .error-legend {
+            list-style: none;
+            padding: 0;
+            margin-top: 0.75rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .error-legend li {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .legend-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        /* Styles pour la modale de création de groupes */
+        #groupCreatorModal .modal-content { max-width: 600px; }
+        #groupCreatorChatbox {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+        }
+        #groupCreatorInput {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+        .group-config {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        /* --- Styles des boutons améliorés --- */
+        .validate-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .validate-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .validate-btn:disabled {
+            background-color: #e9ecef;
+            color: #adb5bd;
+            cursor: not-allowed;
+        }
+
+        .validate-btn.secondary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+        }
+        .validate-btn.secondary:hover {
+            background-color: #5a6268;
+        }
+
+        .validate-btn.tertiary {
+            background-color: transparent;
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+        }
+        .validate-btn.tertiary:hover {
+            background-color: var(--primary-light);
+        }
+
+        /* Styles pour la création manuelle de groupes */
+        .manual-group-container {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            min-height: 300px;
+        }
+        .student-pool-container {
+            flex-basis: 250px;
+            flex-shrink: 0;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            display: flex;
+            flex-direction: column;
+        }
+        .student-pool-container h4 {
+            margin-top: 0;
+            text-align: center;
+            font-size: 1rem;
+            color: var(--header-color);
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .student-list.manual {
+            list-style: none;
+            padding: 0;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        .student-item.manual {
+            background-color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: grab;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.07);
+            transition: box-shadow 0.2s, opacity 0.2s;
+            border-left: 4px solid var(--secondary-color);
+        }
+        .student-item.manual.dragging {
+            opacity: 0.5;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .group-columns {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            flex-grow: 1;
+            gap: 1rem;
+        }
+        .group-column {
+            flex: 1;
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            min-height: 200px;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .group-column.drag-over {
+            background-color: var(--primary-light);
+            border-color: var(--primary-color);
+            border-style: solid;
+        }
+        .group-column h5 {
+            text-align: center;
+            color: var(--text-muted);
+            margin-top: 0;
+        }
+
+        /* Styles pour la liste des groupes sauvegardés dans la modale */
+        .saved-group-list {
+            margin-top: 2rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem;
+        }
+        .saved-group-list h4 {
+            margin-top: 0;
+            color: var(--header-color);
+        }
+        .saved-group-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            background-color: #f8f9fa;
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
@@ -38,6 +334,11 @@
                 {% endfor %}
             </select>
         </div>
+        <div class="filter-group" style="flex-grow: 0;">
+            <button type="button" id="openGroupCreatorBtn" class="validate-btn secondary" {% if not selected_group %}disabled{% endif %}>
+                <i class="fas fa-users"></i> Créer des groupes
+            </button>
+        </div>
     </form>
 </div>
 
@@ -47,13 +348,66 @@
     </div>
     <div class="student-grid" id="student-grid-container">
         {% for data in student_performance %}
-            <div class="student-card" 
-                 data-student-name="{{ data.student.first_name|default:data.student.username }}"
-                 data-student-id="{{ data.student_id }}"
-                 data-performance='{{ data.performance_data|jsonify }}'>
-                <div class="student-avatar">{{ data.student.username|first|upper }}</div>
-                <p class="student-name">{{ data.student.first_name|default:data.student.username }}</p>
-            </div>
+            {% with student=data.student performance=data.performance_data.0 %} {# On prend le premier élément de la liste de perfs #}
+            <a href="{% url 'dashboard:session-list' %}?student_id={{ student.id }}{% if selected_document_id %}&document_id={{ selected_document_id }}{% endif %}" class="student-card">
+                <div class="student-card-header">
+                    <div class="student-avatar">{{ student.username|first|upper }}</div>
+                    <h4 class="student-name">{{ student.first_name|default:student.username }}</h4>
+                </div>
+                <div class="student-card-body">
+                    {% if performance %}
+                        {% if performance.is_aggregated %}
+                            {# NOUVELLE VUE AGRÉGÉE #}
+                            <ul class="performance-summary">
+                                <li><i class="fas fa-redo-alt"></i> <span>{{ performance.attempts }}</span> Sessions</li>
+                                <li><i class="fas fa-comments"></i> <span>{{ performance.message_count }}</span> Messages</li>
+                                <li><i class="fas fa-stopwatch"></i> <span>{{ performance.total_duration_seconds|floatformat:0|div:60|floatformat:0 }}</span> min</li>
+                            </ul>
+                            {% if performance.error_percentages %}
+                            <div class="error-summary">
+                                <h5><i class="fas fa-chart-pie"></i> Répartition des erreurs</h5>
+                                <div class="error-continuum">
+                                    <div class="error-continuum-calcul" style="--width: {{ performance.error_percentages.calcul|default:0 }}%;" title="Calcul: {{ performance.aggregated_errors.calcul|default:0 }}"></div>
+                                    <div class="error-continuum-substitution" style="--width: {{ performance.error_percentages.substitution|default:0 }}%;" title="Substitution: {{ performance.aggregated_errors.substitution|default:0 }}"></div>
+                                    <div class="error-continuum-procedure" style="--width: {{ performance.error_percentages.procedure|default:0 }}%;" title="Procédure: {{ performance.aggregated_errors.procedure|default:0 }}"></div>
+                                    <div class="error-continuum-conceptuelle" style="--width: {{ performance.error_percentages.conceptuelle|default:0 }}%;" title="Conceptuelle: {{ performance.aggregated_errors.conceptuelle|default:0 }}"></div>
+                                </div>
+                                <ul class="error-legend">
+                                    <li><span class="legend-dot" style="background-color: #3498db;"></span> Calcul</li>
+                                    <li><span class="legend-dot" style="background-color: #f1c40f;"></span> Substitution</li>
+                                    <li><span class="legend-dot" style="background-color: #e74c3c;"></span> Procédure</li>
+                                    <li><span class="legend-dot" style="background-color: #9b59b6;"></span> Conceptuelle</li>
+                                </ul>
+                            </div>
+                            {% endif %}
+                        {% else %}
+                            {# VUE PAR EXERCICE EXISTANTE #}
+                            <ul class="performance-summary">
+                                <li><i class="fas fa-redo-alt"></i> <span>{{ performance.attempts }}</span> Tentatives</li>
+                                <li><i class="fas fa-comments"></i> <span>{{ performance.message_count }}</span> Messages</li>
+                                <li><i class="fas fa-stopwatch"></i> <span>{{ performance.total_duration_seconds|floatformat:0|div:60|floatformat:0 }}</span> min</li>
+                            </ul>
+                            {% if performance.aggregated_errors %}
+                            <div class="error-summary">
+                                <h5><i class="fas fa-exclamation-triangle"></i> Erreurs fréquentes</h5>
+                                <ul>
+                                    {% for error, count in performance.aggregated_errors.items %}
+                                    <li>{{ error }} ({{ count }})</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                        {% endif %}
+                        <div class="student-card-footer">
+                            <i class="fas fa-calendar-alt"></i> Dernière activité : {{ performance.last_activity }}
+                        </div>
+
+                    {% else %}
+                        <p class="empty-state">Aucune activité pour cet exercice.</p>
+                    {% endif %}
+                </div>
+            </a>
+            {% endwith %}
         {% empty %}
             <p class="empty-state">Aucun élève trouvé dans cette classe.</p>
         {% endfor %}
@@ -62,16 +416,74 @@
     <p class="empty-state"><i class="fas fa-info-circle"></i> Veuillez sélectionner une classe pour commencer.</p>
 {% endif %}
 
-<div id="studentModal" class="modal">
+<div id="groupCreatorModal" class="modal" style="display:none;">
     <div class="modal-content">
         <span class="close-button">&times;</span>
-        <h2 id="modal-student-name"></h2>
-        <div id="modal-performance-details"></div>
+        <h2><i class="fas fa-magic"></i> Assistant de création de groupes</h2>
+        
+        <div id="groupConfigStep">
+            <div class="group-config">
+                <label for="numGroupsInput">Nombre de groupes souhaités :</label>
+                <input type="number" id="numGroupsInput" min="2" value="2" style="width: 80px;">
+            </div>
+            <button id="startGroupCreationBtn" class="validate-btn">Lancer l'assistant</button>
+
+            {% if saved_groups %}
+            <div class="saved-group-list">
+                <h4>Ou utiliser une configuration existante :</h4>
+                {% for group_config in saved_groups %}
+                <div class="saved-group-item" data-config="{{ group_config.configuration|jsonify }}">
+                    <span>{{ group_config.name }}</span>
+                    <button class="use-config-btn validate-btn tertiary" data-num-groups="{{ group_config.configuration|length }}">Modifier</button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div id="groupChatStep" style="display:none;">
+            <div id="groupCreatorChatbox" class="chat-container" style="height: 300px;"></div>
+            <textarea id="groupCreatorInput" placeholder="Votre message à l'IA..."></textarea>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; flex-wrap: wrap; gap: 10px;">
+                <button id="sendToGroupCreatorBtn" class="validate-btn">Envoyer</button>
+                <button id="manualGroupCreationBtn" type="button" class="validate-btn tertiary">Passer à la création manuelle</button>
+                <button id="finalizeGroupsBtn" class="validate-btn secondary" style="display: none;">Créer les groupes</button>
+            </div>
+        </div>
+        <div id="manualGroupStep" style="display:none;">
+            <p>Faites glisser les élèves dans les groupes souhaités.</p>
+            <div class="manual-group-container">
+                <div class="student-pool-container">
+                    <h4>Élèves à placer</h4>
+                    <ul id="studentPool" class="student-list manual"></ul>
+                </div>
+                <div id="groupColumnsContainer" class="group-columns"></div>
+            </div>
+            <button id="saveManualGroupsBtn" class="validate-btn" style="margin-top: 20px;">Enregistrer les groupes</button>
+        </div>
     </div>
 </div>
-
 {% endblock %}
-
 {% block scripts %}
-<script src="{% static 'dashboard/class_dashboard.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const openBtn = document.getElementById('openGroupCreatorBtn');
+    const modal = document.getElementById('groupCreatorModal');
+    const closeBtn = modal.querySelector('.close-button');
+
+    openBtn.addEventListener('click', () => modal.style.display = 'block');
+    closeBtn.addEventListener('click', () => modal.style.display = 'none');
+    window.addEventListener('click', (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+    });
+
+    // Passer les URLs et le token CSRF au script JS
+    window.GROUP_CREATOR_CONFIG = {
+        apiUrl: "{% url 'dashboard:create-student-groups' %}",
+        saveUrl: "{% url 'dashboard:save-group-configuration' %}",
+        csrfToken: "{{ csrf_token }}"
+    };
+});
+</script>
+<script src="{% static 'dashboard/class_dashboard_groups.js' %}"></script>
 {% endblock %}

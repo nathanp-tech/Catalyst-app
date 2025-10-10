@@ -6,6 +6,7 @@
 {% block head_extra %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 {% endblock %}
 
 {% block content %}
@@ -17,12 +18,12 @@
 <div class="dashboard-section">
     <h2 class="section-title">Suivi des Élèves</h2>
     <div class="dashboard-grid">
-        <a href="{% url 'session-list' %}" class="dashboard-card primary">
+        <a href="{% url 'dashboard:session-list' %}" class="dashboard-card primary">
             <div class="card-icon">📊</div>
             <h2>Sessions de Tutorat</h2>
             <p>Consultez les conversations individuelles de vos élèves avec le tuteur IA.</p>
         </a>
-        <a href="{% url 'class-dashboard' %}" class="dashboard-card">
+        <a href="{% url 'dashboard:class-dashboard' %}" class="dashboard-card">
             <div class="card-icon">🧑‍🏫</div>
             <h2>Tableau de Bord Classe</h2>
             <p>Suivez la performance globale de chaque élève par exercice.</p>
@@ -33,10 +34,15 @@
 <div class="dashboard-section">
     <h2 class="section-title">Gestion du Contenu et des Classes</h2>
     <div class="dashboard-grid">
-        <a href="{% url 'manage-classes' %}" class="dashboard-card">
+        <a href="{% url 'dashboard:manage-classes' %}" class="dashboard-card">
             <div class="card-icon">👥</div>
             <h2>Gestion des Classes</h2>
             <p>Ajoutez, modifiez ou supprimez des élèves et des groupes.</p>
+        </a>
+        <a href="{% url 'dashboard:saved-groups' %}" class="dashboard-card">
+            <div class="card-icon">🗂️</div>
+            <h2>Groupes Enregistrés</h2>
+            <p>Consultez les groupes de travail que vous avez créés.</p>
         </a>
         <a href="{% url 'document-upload' %}" class="dashboard-card">
             <div class="card-icon">📄</div>
@@ -54,10 +60,13 @@
         </div>
         <div class="document-list">
             {% for doc in documents %}
-                <a href="{{ doc.file.url }}" target="_blank" class="document-item">
-                    <span>{{ doc.title }}</span>
+            <a href="{{ doc.file.url }}" target="_blank" class="document-item">
+                <div class="document-info">
+                    <span class="document-title"><i class="fas fa-file-pdf"></i> {{ doc.title }}</span>
                     <small>Ajouté le {{ doc.uploaded_at|date:"d/m/Y" }}</small>
-                </a>
+                </div>
+                <i class="fas fa-external-link-alt document-link-icon"></i>
+            </a>
             {% empty %}
                 <p class="empty-list">Vous n'avez uploadé aucun document pour le moment.</p>
             {% endfor %}
@@ -79,6 +88,40 @@
     }
     .dashboard-card-list {
         grid-column: 1 / -1; /* S'assure que la liste prend toute la largeur */
+    }
+
+    /* --- Styles pour la liste des documents --- */
+    .document-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid #e0e0e0;
+        transition: background-color 0.2s ease-in-out;
+        text-decoration: none;
+        color: inherit;
+    }
+    .document-item:last-child {
+        border-bottom: none;
+    }
+    .document-item:hover {
+        background-color: #f9f9f9;
+    }
+    .document-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .document-title {
+        font-weight: 500;
+        color: #333;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .document-link-icon {
+        color: var(--secondary-color);
+        opacity: 0.7;
     }
 </style>
 {% endblock %}

@@ -136,7 +136,7 @@
 </div>
 
 <div class="filter-container">
-    <form method="get" action="{% url 'session-list' %}" style="display: contents;">
+    <form method="get" action="{% url 'dashboard:session-list' %}" style="display: contents;">
         <div class="filter-wrapper">
             <i class="fas fa-file-alt"></i>
             <select name="document_id" onchange="this.form.submit()">
@@ -148,20 +148,9 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="filter-wrapper">
-            <i class="fas fa-user-graduate"></i>
-            <select name="student_id" onchange="this.form.submit()">
-                <option value="">Tous les élèves</option>
-                {% for student in all_students %}
-                    <option value="{{ student.id }}" {% if filtered_student_id == student.id|stringformat:"s" %}selected{% endif %}>
-                        {{ student.username }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
         <button type="submit" class="validate-btn">Filtrer</button>
         {% if filtered_document_id or filtered_student_id %}
-            <a href="{% url 'session-list' %}" class="clear-search-btn" title="Effacer les filtres">
+            <a href="{% url 'dashboard:session-list' %}" class="clear-search-btn" title="Effacer les filtres">
                 <i class="fas fa-times"></i>
             </a>
         {% endif %}
@@ -194,11 +183,8 @@
                          title="Télécharger en PDF">
                         <i class="fas fa-file-pdf"></i>
                     </div>
-                    <div class="summary-icon" data-session-id="{{ session.id }}" title="Générer un résumé IA">
-                        <i class="fas fa-wand-magic-sparkles"></i>
-                    </div>
                 </td>
-                <td><a href="{% url 'session-detail' session.id %}">Voir la conversation</a></td>
+                <td><a href="{% url 'dashboard:session-detail' session.id %}">Voir la conversation</a></td>
             </tr>
             {% empty %}
             <tr>
@@ -235,46 +221,6 @@
                 const iconContainer = event.currentTarget;
                 const { sessionId, studentSlug } = iconContainer.dataset;
                 downloadSessionPDF(iconContainer.querySelector('i'), sessionId, studentSlug);
-            });
-        });
-
-        // Logique pour la modale de résumé
-        const summaryIcons = document.querySelectorAll('.summary-icon');
-        const modal = document.getElementById('summaryModal');
-        const closeButton = modal.querySelector('.close-button');
-        const summaryContent = document.getElementById('summary-content');
-
-        summaryIcons.forEach(icon => {
-            icon.addEventListener('click', async (event) => {
-                const sessionId = event.currentTarget.dataset.sessionId;
-                modal.style.display = 'block';
-                summaryContent.innerHTML = '<div class="spinner" style="margin: 20px auto;"></div><p style="text-align: center;">Génération du résumé en cours...</p>';
-
-                try {
-                    const response = await fetch(`/dashboard/api/sessions/${sessionId}/summary/`);
-                    const data = await response.json();
-
-                    if (data.error) {
-                        throw new Error(data.error);
-                    }
-
-                    let contentHtml = `<h3>Analyse des erreurs</h3>`;
-                    if (data.error_analysis && Object.keys(data.error_analysis).length > 0) {
-                        contentHtml += '<ul>';
-                        for (const [error, count] of Object.entries(data.error_analysis)) {
-                            contentHtml += `<li><strong>${error}:</strong> ${count}</li>`;
-                        }
-                        contentHtml += '</ul>';
-                    } else {
-                        contentHtml += '<p>Aucune erreur spécifique identifiée.</p>';
-                    }
-
-                    contentHtml += `<h3 style="margin-top: 20px;">Résumé de la progression</h3><p>${data.summary_text || "Aucun résumé textuel disponible."}</p>`;
-                    summaryContent.innerHTML = contentHtml;
-
-                } catch (error) {
-                    summaryContent.innerHTML = `<p style="color: red;">Erreur: ${error.message}</p>`;
-                }
             });
         });
 

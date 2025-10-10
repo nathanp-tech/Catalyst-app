@@ -1,6 +1,8 @@
 from django.urls import path
 from .views import *
 
+app_name = 'dashboard'
+
 urlpatterns = [
     # Le nom 'dashboard' est utilisé dans settings.py pour LOGIN_REDIRECT_URL
     path("", DashboardView.as_view(), name="dashboard"),
@@ -16,8 +18,11 @@ urlpatterns = [
 
     # URLs pour la gestion des classes et des élèves
     path('manage-classes/', ClassManagementView.as_view(), name='manage-classes'),
+    path('saved-groups/', SavedGroupsView.as_view(), name='saved-groups'),
     path('api/classes/create/', ClassCreateView.as_view(), name='class-create'),
     path('api/classes/<int:group_id>/action/', ClassActionView.as_view(), name='class-action'),
     path('api/students/create/', StudentCreateView.as_view(), name='student-create'),
     path('api/students/<int:user_id>/action/', StudentActionView.as_view(), name='student-action'),
+    path('api/create-student-groups/', CreateStudentGroupsView.as_view(), name='create-student-groups'),
+    path('api/save-group-configuration/', SaveGroupConfigurationView.as_view(), name='save-group-configuration'),
 ]

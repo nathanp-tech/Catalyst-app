@@ -1,0 +1,9 @@
+<div class="saved-group-card">
+    <h4>{{ group_config.name }}</h4>
+    <small>Créé le {{ group_config.created_at|date:"d/m/Y" }}</small>
+    <div class="group-display">
+        {% for group in group_config.configuration %}
+        <div class="group-pod"><strong>Groupe {{ forloop.counter }}:</strong> {{ group|join:", " }}</div>
+        {% endfor %}
+    </div>
+</div>

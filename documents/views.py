@@ -18,7 +18,7 @@ class DocumentUploadView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     model = Document
     form_class = DocumentForm
     template_name = 'documents/document_upload.html'
-    success_url = reverse_lazy('dashboard')  # Redirige vers le tableau de bord après succès
+    success_url = reverse_lazy('dashboard:dashboard')  # Redirige vers le tableau de bord après succès
 
     def test_func(self):
         """Autorise l'accès uniquement aux professeurs."""

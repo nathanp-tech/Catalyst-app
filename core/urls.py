@@ -25,7 +25,7 @@ urlpatterns = [
     path("", HomeView.as_view(), name="home"),
     # path("api/", APIRootView.as_view(), name="api-root"), # Décommenter si vous avez besoin d'une racine pour l'API
     path("admin/", admin.site.urls),
-    path("dashboard/", include("dashboard.urls")), # Page web du tableau de bord
+    path("dashboard/", include(("dashboard.urls", "dashboard"), namespace="dashboard")), # Page web du tableau de bord
     path("tutor/", include("tutor.urls")), # Page web et API du tuteur
     path("documents/", include("documents.urls")), # URLs pour la gestion des documents
 

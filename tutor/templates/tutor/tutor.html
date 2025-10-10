@@ -6,6 +6,33 @@
 {% block head_extra %}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <style>
+        /* Styles pour la carte de question en mode plein écran */
+        .whiteboard-workspace:fullscreen .question-card.in-fullscreen {
+            display: block;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 300px;
+            height: auto;
+            max-height: 40%;
+            z-index: 10;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            border: 1px solid #ccc;
+            background-color: white;
+            resize: both; /* Permet de redimensionner */
+            overflow: auto; /* Ajoute des barres de défilement si nécessaire */
+        }
+
+        .whiteboard-workspace:fullscreen .question-card.in-fullscreen #questionImageContainer {
+            max-height: 200px; /* Limite la hauteur de l'image pour la lisibilité */
+        }
+
+        /* Cache la carte quand elle n'est pas en plein écran */
+        .question-card.in-fullscreen:not(:fullscreen) {
+            display: none;
+        }
+    </style>
     
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -30,6 +57,10 @@
                 <button id="startExerciseBtn" class="validate-btn" disabled>
                     <i class="fas fa-play"></i> Commencer
                 </button>
+            </div>
+            <div id="loadingIndicator" class="hidden">
+                <div class="spinner"></div>
+                <p>Préparation de votre session avec l'IA...</p>
             </div>
         </div>
     </div>
@@ -57,12 +88,6 @@
                 <div id="questionImageContainer">
                     <img id="questionImageDisplay" src="" alt="Question de mathématiques">
                 </div>
-                <div id="pdfNavControls" class="hidden">
-                    <button id="prevPageBtn">&lt; Précédent</button>
-                    <span id="pageIndicator"></span>
-                    <button id="nextPageBtn">Suivant &gt;</button>
-                    <button id="startOnPageBtn" class="validate-btn">Commencer sur cette page</button>
-                </div>
             </div>
             
             <div class="chat-container">
@@ -88,6 +113,8 @@
                     </div>
                     <div class="tool-divider"></div>
                     <button id="clearCanvasBtn" class="tool clear-btn" title="Effacer tout"><i class="fas fa-trash-alt"></i></button>
+                    <div class="tool-divider"></div>
+                    <button id="fullscreenBtn" class="tool" title="Plein écran"><i class="fas fa-expand"></i></button>
                 </div>
                 
                 <div id="canvas-container">

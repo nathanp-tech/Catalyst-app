@@ -1,10 +1,11 @@
 # tutor/views.py
 
+import threading
 import os
 import json
 from django.core.serializers.json import DjangoJSONEncoder
 from openai import OpenAI
-from rest_framework.reverse import reverse
+from django.urls import reverse
 from django.shortcuts import redirect
 from rest_framework import status
 from rest_framework.response import Response
@@ -15,6 +16,7 @@ from django.views.decorators.csrf import csrf_protect
 from django.utils.timezone import now
 from .models import ChatSession, ChatMessage
 from documents.models import Document
+from dashboard.services import generate_and_save_session_summary
 
 class TutorPageView(TemplateView):
     """
@@ -35,6 +37,11 @@ class TutorPageView(TemplateView):
         if chat_session_id:
             try:
                 session = ChatSession.objects.select_related('document').get(id=chat_session_id)
+                # Si on reprend une session, on s'assure qu'elle est marquée comme "en cours"
+                if resume_session_id and session.end_time:
+                    session.end_time = None
+                    session.save()
+
                 messages = ChatMessage.objects.filter(session=session).order_by('timestamp')
                 
                 chat_history = []
@@ -119,7 +126,7 @@ class TutorImageAnalysisView(OpenAIAPIView):
 
             welcome_prompt = {
                 "role": "system",
-                "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit être un message d'accueil court et motivant pour l'inviter à commencer. Tu tutoies l'élève. Ne mentionne ni la question ni la solution."
+                "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit être un message d'accueil court et motivant pour l'inviter à commencer. Tu tutoies l'élève. Ne mentionne ni la question ni la solution. Réponds uniquement en français."
             }
             
             welcome_response = self.client.chat.completions.create(
@@ -130,13 +137,16 @@ class TutorImageAnalysisView(OpenAIAPIView):
             
             assistant_welcome_text = welcome_response.choices[0].message.content
             
+            # On formate le message pour qu'il corresponde au JSONField
+            assistant_welcome_structured = [{"type": "text", "text": assistant_welcome_text}]
+            
             ChatMessage.objects.create(
                 session=chat_session,
                 role='assistant',
-                content=assistant_welcome_text  # Stocker le texte brut
+                content=assistant_welcome_structured
             )
             
-            initial_history = [{"role": "assistant", "content": assistant_welcome_text}]
+            initial_history = [{"role": "assistant", "content": assistant_welcome_structured}]
             return Response({"initial_history": initial_history}, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -163,7 +173,7 @@ class TutorInteractionView(OpenAIAPIView):
         request.session['hint_level'] = 1
 
         system_prompt = f"""
-        Tu es un tuteur de mathématiques bienveillant et Socratique. Ton objectif est de guider l'élève sans jamais lui donner la réponse.
+        Tu es un tuteur de mathématiques bienveillant et Socratique. Ton objectif est de guider l'élève sans jamais lui donner la réponse. Toutes tes réponses doivent être en français.
         
         Voici le contexte de l'exercice :
         - La question est : "{exercise_context['question']}"
@@ -258,7 +268,7 @@ class TutorHintView(OpenAIAPIView):
         Génère un indice de {level_descriptions.get(hint_level, level_descriptions[3])}.
         L'indice doit être une question ouverte qui guide l'élève. Ne donne JAMAIS la réponse.
         Adresse-toi directement à l'élève en le tutoyant.
-        """
+        Réponds uniquement en français."""
 
         try:
             completion = self.client.chat.completions.create(
@@ -293,12 +303,16 @@ class EndSessionView(APIView):
                 session = ChatSession.objects.get(id=chat_session_id, student=request.user)
                 if not session.end_time:
                     session.end_time = now()
+                    # Lancer la génération du résumé en arrière-plan
+                    thread = threading.Thread(target=generate_and_save_session_summary, args=[session.id])
+                    thread.start()
                     session.save()
             except ChatSession.DoesNotExist:
                 pass
-            
+
             request.session.pop('chat_session_id', None)
             request.session.pop('exercise_context', None)
             request.session.pop('hint_level', None)
-
+        
+        # Voici la ligne corrigée :
         return Response({'redirect_url': reverse('dashboard:dashboard')}, status=status.HTTP_200_OK)

@@ -33,23 +33,73 @@ body.drawing-active {
 #welcomeScreen { display: flex; justify-content: center; align-items: center; width: 100%; }
 .welcome-box { background: var(--card-bg); padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; max-width: 500px; }
 .welcome-box h1 { color: var(--primary-color); }
+.welcome-box #loadingIndicator {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    color: var(--text-color);
+}
+.welcome-box #loadingIndicator.hidden {
+    display: none;
+}
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
 
-#workspace { display: flex; gap: 15px; width: 100%; height: calc(100vh - 30px); max-width: 1800px; }
+#workspace { 
+  display: flex; 
+  gap: 15px; 
+  width: 100%; 
+  height: calc(100vh - 100px); /* Hauteur réduite pour voir le footer */
+  max-width: 1800px; 
+  margin: auto;
+}
 #workspace.hidden, #welcomeScreen.hidden { display: none; }
 
-.left-panel, .right-panel { display: flex; flex-direction: column; gap: 15px; height: 100%; overflow: hidden; }
-.left-panel { flex: 0 0 45%; min-width: 350px; }
+.left-panel, .right-panel { display: flex; flex-direction: column; gap: 15px; height: 100%; min-height: 0; /* Empêche le débordement de flexbox */ }
+.left-panel { flex: 1 1 45%; min-width: 350px; }
 .right-panel { flex: 1 1 55%; min-width: 450px; }
 
-.question-card { flex: 1 1 40%; display: flex; flex-direction: column; overflow: hidden; background: var(--card-bg); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 15px; }
+.question-card { flex: 0 1 40%; display: flex; flex-direction: column; overflow: hidden; background: var(--card-bg); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 15px; min-height: 250px; }
 .card-header { display: flex; align-items: center; margin-bottom: 10px; font-weight: 600; color: var(--primary-color); flex-shrink: 0; }
 .question-zoom-controls { display: flex; align-items: center; gap: 8px; background-color: var(--background-color); padding: 4px 8px; border-radius: 8px; margin-left: auto; margin-right: 15px; }
 
 #questionImageContainer { flex-grow: 1; overflow: auto; cursor: grab; background: #f8f9fa; border-radius: 8px; position: relative; }
 #questionImageDisplay { transform-origin: top left; }
 
-.chat-container { flex: 1 1 60%; background: var(--card-bg); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 20px; display: flex; flex-direction: column; overflow-y: auto; }
+.chat-container {
+  flex: 1 1 60%;
+  background: var(--background-color); /* Fond neutre et cohérent */
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  gap: 12px; /* Espace entre les bulles de message */
+}
+.chat-message {
+  padding: 10px 15px;
+  border-radius: 18px; /* Bulles plus arrondies */
+  max-width: 80%;
+  line-height: 1.5;
+  word-wrap: break-word;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.chat-message.user { background-color: var(--primary-color); color: white; align-self: flex-end; border-bottom-right-radius: 5px; }
+.chat-message.tutor { background-color: var(--card-bg); color: var(--text-color); align-self: flex-start; border-bottom-left-radius: 5px; }
+.chat-message.tutor .comment-text { color: var(--text-color); } /* Assure que le texte est lisible */
+.chat-message.user .comment-text { color: white; }
+.chat-message img { max-width: 100%; border-radius: 8px; margin-top: 5px; }
 
+.whiteboard-workspace, .input-area { min-width: 0; }
 .whiteboard-workspace { flex-grow: 1; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden; }
 
 /* Styles pour la barre d'outils */
@@ -75,3 +125,15 @@ input[type="color"] { width: 28px; height: 28px; border: none; padding: 0; backg
 button { background-color: var(--primary-color); color: white; border: none; padding: 10px 15px; border-radius: 12px; cursor: pointer; font-weight: 600; transition: background-color 0.2s; }
 button:hover { background-color: var(--secondary-color); }
 button:disabled { background-color: #e0e0e0; cursor: not-allowed; }
+
+/* --- RESPONSIVE --- */
+@media (max-width: 1024px) {
+    #workspace {
+        flex-direction: column;
+        height: auto; /* Permet au contenu de déterminer la hauteur */
+    }
+    .left-panel, .right-panel {
+        min-width: 100%;
+        height: 80vh; /* Donne une hauteur substantielle à chaque panneau */
+    }
+}

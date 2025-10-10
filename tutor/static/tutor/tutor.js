@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const workspace = document.getElementById('workspace');
     const documentSelector = document.getElementById('documentSelector');
     const startExerciseBtn = document.getElementById('startExerciseBtn');
+    const questionCard = document.getElementById('questionCard');
     const questionImageDisplay = document.getElementById('questionImageDisplay');
     const changeExerciseBtn = document.getElementById('changeExerciseBtn');
     const endExerciseBtn = document.getElementById('endExerciseBtn');
@@ -19,15 +20,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const sizeSlider = document.getElementById('sizeSlider');
     const clearCanvasBtn = document.getElementById('clearCanvasBtn');
     const thicknessIcon = document.getElementById('thickness-icon');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
     const zoomInBtn = document.getElementById('zoomInBtn');
     const zoomOutBtn = document.getElementById('zoomOutBtn');
     const zoomResetBtn = document.getElementById('zoomResetBtn');
     const questionZoomPercent = document.getElementById('questionZoomPercent');
-    const pdfNavControls = document.getElementById('pdfNavControls');
-    const prevPageBtn = document.getElementById('prevPageBtn');
-    const nextPageBtn = document.getElementById('nextPageBtn');
-    const pageIndicator = document.getElementById('pageIndicator');
-    const startOnPageBtn = document.getElementById('startOnPageBtn');
+    const documentSelectionDiv = document.getElementById('documentSelection');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const leftPanel = document.querySelector('.left-panel');
+    const whiteboardWorkspace = document.querySelector('.whiteboard-workspace');
     
 
     // --- VARIABLES D'ÉTAT ---
@@ -73,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
             welcomeScreen.classList.add('hidden');
             workspace.classList.remove('hidden');
             if (documentUrl.toLowerCase().endsWith('.pdf')) {
-                await loadPdfAsImage(documentUrl);
+                await loadPdfAsImage(documentUrl, 1); // On charge la première page
             } else {
                 uploadedImage = documentUrl;
                 if (questionImageDisplay) questionImageDisplay.src = uploadedImage;
@@ -94,8 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             if (documentUrl.toLowerCase().endsWith('.pdf')) {
-                await loadPdfAsImage(documentUrl);
-                if (totalPages === 1) await analyzeAndSwitchView();
+                await loadPdfAsImage(documentUrl, 1);
+                await analyzeAndSwitchView();
             } else {
                 uploadedImage = documentUrl;
                 if (questionImageDisplay) questionImageDisplay.src = uploadedImage;
@@ -109,34 +110,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    async function loadPdfAsImage(pdfUrl) {
+    async function loadPdfAsImage(pdfUrl, pageNum) {
         const loadingTask = pdfjsLib.getDocument(pdfUrl);
         currentPdf = await loadingTask.promise;
         totalPages = currentPdf.numPages;
-        currentPageNum = 1;
-        if (totalPages > 1) {
-            pdfNavControls.classList.remove('hidden');
-        }
-        await renderPdfPage(1);
+        currentPageNum = pageNum;        
+        await renderPdfPage(pageNum);
     }
 
     async function renderPdfPage(pageNum) {
-        if (!currentPdf) return;
-        pageIndicator.textContent = `Page ${pageNum} / ${totalPages}`;
-        prevPageBtn.disabled = pageNum <= 1;
-        nextPageBtn.disabled = pageNum >= totalPages;
-        
-        const page = await currentPdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 2.0 });
-        
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.height = viewport.height;
-        tempCanvas.width = viewport.width;
-        const renderContext = { canvasContext: tempCanvas.getContext('2d'), viewport: viewport };
-        await page.render(renderContext).promise;
-        
-        uploadedImage = tempCanvas.toDataURL('image/png');
-        if (questionImageDisplay) questionImageDisplay.src = uploadedImage;
+        if (currentPdf) {
+            const page = await currentPdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 2.0 });
+            
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.height = viewport.height;
+            tempCanvas.width = viewport.width;
+            const renderContext = { canvasContext: tempCanvas.getContext('2d'), viewport: viewport };
+            await page.render(renderContext).promise;
+            
+            uploadedImage = tempCanvas.toDataURL('image/png');
+            if (questionImageDisplay) questionImageDisplay.src = uploadedImage;
+        }
     }
 
     async function analyzeAndSwitchView() {
@@ -148,6 +143,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function analyzeQuestionImage() {
         if (!documentSelector || !uploadedImage) return;
+        
+        // Affiche l'indicateur de chargement et masque la sélection
+        documentSelectionDiv.classList.add('hidden');
+        loadingIndicator.classList.remove('hidden');
+
         const imageBase64 = uploadedImage.split(',')[1];
         try {
             const res = await fetch(window.APP_CONFIG.analyzeImageUrl, {
@@ -163,6 +163,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hintBtn) hintBtn.disabled = false;
         } catch (err) {
             console.error(err);
+            alert("Une erreur est survenue lors de la préparation de l'exercice. Veuillez réessayer.");
+            // En cas d'erreur, on ré-affiche la sélection
+            documentSelectionDiv.classList.remove('hidden');
+        } finally {
+            loadingIndicator.classList.add('hidden');
         }
     }
 
@@ -260,6 +265,35 @@ document.addEventListener('DOMContentLoaded', () => {
         return fabricCanvas.toDataURL({ format: 'png', quality: 1.0 });
     }
     
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            // Déplacer la carte de question dans le conteneur du tableau blanc avant le plein écran
+            whiteboardWorkspace.appendChild(questionCard);
+            if (whiteboardWorkspace.requestFullscreen) {
+                whiteboardWorkspace.requestFullscreen();
+            } else if (whiteboardWorkspace.webkitRequestFullscreen) { /* Safari */
+                whiteboardWorkspace.webkitRequestFullscreen();
+            }
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    }
+
+    function handleFullscreenChange() {
+        const icon = fullscreenBtn.querySelector('i');
+        if (document.fullscreenElement) {
+            // On est en plein écran
+            icon.className = 'fas fa-compress';
+            questionCard.classList.add('in-fullscreen');
+        } else {
+            // On a quitté le plein écran, on remet la carte à sa place
+            leftPanel.insertBefore(questionCard, leftPanel.firstChild);
+            questionCard.classList.remove('in-fullscreen');
+            icon.className = 'fas fa-expand';
+        }
+    }
     // ===================================================================
     // ===                    GESTION DU CHAT                          ===
     // ===================================================================
@@ -378,27 +412,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (colorPicker) colorPicker.addEventListener('input', () => setColor(colorPicker.value));
         if (sizeSlider) sizeSlider.addEventListener('input', () => setSize(sizeSlider.value));
         if (clearCanvasBtn) clearCanvasBtn.addEventListener('click', clearCanvas);
+        if (fullscreenBtn) fullscreenBtn.addEventListener('click', toggleFullscreen);
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange); // Pour Safari
         
         if (zoomInBtn) zoomInBtn.addEventListener('click', () => updateQuestionZoom(questionZoomLevel + 0.2));
         if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => updateQuestionZoom(questionZoomLevel - 0.2));
         if (zoomResetBtn) zoomResetBtn.addEventListener('click', () => updateQuestionZoom(1));
         
-        if (prevPageBtn) prevPageBtn.addEventListener('click', () => {
-            if (currentPageNum > 1) {
-                currentPageNum--;
-                renderPdfPage(currentPageNum);
-            }
-        });
-        if (nextPageBtn) nextPageBtn.addEventListener('click', () => {
-            if (currentPageNum < totalPages) {
-                currentPageNum++;
-                renderPdfPage(currentPageNum);
-            }
-        });
-        if (startOnPageBtn) startOnPageBtn.addEventListener('click', () => {
-            startOnPageBtn.disabled = true;
-            analyzeAndSwitchView();
-        });
     }
     
     // --- Lancement de l'application ---

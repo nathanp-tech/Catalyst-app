@@ -6,6 +6,7 @@
 {% block head_extra %}
     {{ block.super }}
     <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 {% endblock %}
 
 {% block content %}
@@ -27,12 +28,6 @@
         <p>Visualisez vos statistiques et vos derniers résultats de quiz.</p>
     </a>
 
-    <a href="#" class="dashboard-card">
-        <div class="card-icon">📚</div>
-        <h2>Reprendre la dernière leçon</h2>
-        <p>Continuez là où vous vous êtes arrêté sur le "Machine Learning".</p>
-    </a>
-
     <div class="dashboard-card-list" style="grid-column: 1 / -1;">
         <div class="card-header">
             <div class="card-icon">⏳</div>
@@ -40,13 +35,17 @@
         </div>
         <div class="document-list">
             {% for session in sessions %}
-                <div class="document-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
-                    <div>
-                        <span>Session sur: <strong>{{ session.document.title|default:"Exercice personnalisé" }}</strong></span>
-                        <br>
-                        <small>Commencée le {{ session.start_time|date:"d/m/Y à H:i" }}</small>
+                <div class="session-item">
+                    <div class="session-details">
+                        <span class="session-title">Session sur : <strong>{{ session.document.title|default:"Exercice personnalisé" }}</strong></span>
+                        <div class="session-meta">
+                            <small>Commencée le {{ session.start_time|date:"d/m/Y à H:i" }}</small>
+                            <span class="status-badge {{ session.status_class }}">{{ session.status }}</span>
+                        </div>
                     </div>
-                    <a href="{% url 'tutor-page' %}?resume={{ session.id }}" class="validate-btn" style="padding: 8px 12px; text-decoration: none; background-color: var(--secondary-color);">Continuer</a>
+                    <a href="{% url 'tutor-page' %}?resume={{ session.id }}" class="session-action-btn {% if not session.end_time %}in-progress-btn{% endif %}">
+                        {% if session.end_time %}Reprendre <i class="fas fa-redo"></i>{% else %}Continuer <i class="fas fa-arrow-right"></i>{% endif %}
+                    </a>
                 </div>
             {% empty %}
                 <p class="empty-list">Vous n'avez aucune session enregistrée.</p>
@@ -62,8 +61,11 @@
         <div class="document-list">
             {% for doc in documents %}
                 <a href="{{ doc.file.url }}" target="_blank" class="document-item">
-                    <span>{{ doc.title }}</span>
-                    <small>Ajouté le {{ doc.uploaded_at|date:"d/m/Y" }}</small>
+                    <div class="document-info">
+                        <span class="document-title"><i class="fas fa-file-pdf"></i> {{ doc.title }}</span>
+                        <small>Ajouté le {{ doc.uploaded_at|date:"d/m/Y" }}</small>
+                    </div>
+                    <i class="fas fa-external-link-alt document-link-icon"></i>
                 </a>
             {% empty %}
                 <p class="empty-list">Aucun document disponible pour le moment.</p>
@@ -77,4 +79,104 @@
         <p>Gérez vos informations personnelles et vos préférences.</p>
     </a>
 </div>
+
+<style>
+    /* --- Styles pour la liste des documents --- */
+    .document-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid #e0e0e0;
+        transition: background-color 0.2s ease-in-out;
+        text-decoration: none;
+        color: inherit;
+    }
+    .document-item:last-child {
+        border-bottom: none;
+    }
+    .document-item:hover {
+        background-color: #f9f9f9;
+    }
+    .document-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .document-title {
+        font-weight: 500;
+        color: #333;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .document-link-icon {
+        color: var(--secondary-color);
+        opacity: 0.7;
+    }
+
+    /* --- Styles pour la liste des sessions récentes --- */
+    .session-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid #e0e0e0;
+        transition: background-color 0.2s ease-in-out;
+    }
+    .session-item:last-child {
+        border-bottom: none;
+    }
+    .session-item:hover {
+        background-color: #f9f9f9;
+    }
+    .session-details {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .session-title {
+        font-weight: 500;
+        color: #333;
+    }
+    .session-meta {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        font-size: 0.85rem;
+        color: #666;
+    }
+    .session-action-btn {
+        padding: 0.5rem 1rem;
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: 500;
+        transition: background-color 0.2s ease, transform 0.2s ease;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background-color: var(--secondary-color);
+    }
+    .session-action-btn:hover {
+        transform: translateY(-2px);
+        filter: brightness(1.1);
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 0.2em 0.6em;
+        font-size: 0.75rem;
+        font-weight: 700;
+        line-height: 1;
+        text-align: center;
+        white-space: nowrap;
+        vertical-align: baseline;
+        border-radius: 0.25rem;
+    }
+    .status-badge.completed { background-color: #28a745; color: white; }
+    .status-badge.in-progress { background-color: #ffc107; color: #212529; }
+</style>
+
 {% endblock %}

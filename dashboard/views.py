@@ -14,6 +14,7 @@ from django.http import JsonResponse
 from openai import OpenAI
 from collections import defaultdict
 from tutor.models import ChatSession, ChatMessage
+from .models import GroupConfiguration
 
 
 def is_user_in_group(user, group_name):
@@ -36,19 +37,21 @@ class DashboardView(LoginRequiredMixin, View):
             }
             return render(request, 'dashboard/teacher_dashboard.html', context)
         
-        # Si l'utilisateur est un élève ou n'a pas de groupe assigné,
-        # on affiche le tableau de bord élève par défaut.
-        elif is_user_in_group(user, 'Eleves') or not user.groups.exists():
+        # Par défaut, si l'utilisateur n'est pas un professeur, on affiche le tableau de bord élève.
+        else:
             student_sessions = ChatSession.objects.filter(student=user).select_related('document').order_by('-start_time')
+            
+            # Ajout du statut pour chaque session
+            for session in student_sessions:
+                session.status = "Terminé" if session.end_time else "En cours"
+                session.status_class = "completed" if session.end_time else "in-progress"
+
             context = {
                 'user': user, 
                 'documents': Document.objects.all().order_by('-uploaded_at'),
                 'sessions': student_sessions
             }
             return render(request, 'dashboard/student_dashboard.html', context)
-        
-        # Si un utilisateur est dans un autre groupe, on peut prévoir une page par défaut
-        return render(request, 'dashboard/student_dashboard.html', {'user': user, 'documents': []})
 
 
 def is_teacher(user):
@@ -75,6 +78,7 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
         selected_document_id = self.request.GET.get('document')
         context['selected_group_id'] = selected_group_id
         context['selected_document_id'] = selected_document_id
+
         
         selected_group_id = self.request.GET.get('group')
         students = []
@@ -85,8 +89,8 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
                 selected_group = Group.objects.get(id=selected_group_id)
                 context['selected_group'] = selected_group
                 students = User.objects.filter(groups=selected_group).prefetch_related(
-                    'chat_sessions__document', 
-                    'chat_sessions__messages'
+                    'chatsession_set__document', 
+                    'chatsession_set__messages'
                 )
             except Group.DoesNotExist:
                 pass # Le groupe n'existe pas, on renvoie une liste d'élèves vide
@@ -94,40 +98,94 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
         # Agréger les données de performance pour les élèves trouvés
         student_performance = []
         for student in students:
-            sessions_by_doc = defaultdict(list)
-            for session in student.chat_sessions.all():
-                # Filtrer par document si un document est sélectionné
-                if selected_document_id:
-                    if session.document and str(session.document.id) == selected_document_id:
-                        sessions_by_doc[session.document.id].append(session)
-                # Sinon, regrouper toutes les sessions par document
-                elif session.document:
-                    sessions_by_doc[session.document.id].append(session)
-            
-            # Préparer les données pour la modale (format JSON)
             performance_details = []
-            for doc_id, sessions in sessions_by_doc.items():
-                latest_session = max(sessions, key=lambda s: s.start_time)
-                total_duration = sum((s.duration.total_seconds() for s in sessions if s.duration), 0)
-                
-                performance_details.append({
-                    'doc_title': latest_session.document.title,
-                    'status': 'Terminé' if latest_session.end_time else 'En cours',
-                    'attempts': len(sessions),
-                    'message_count': sum(s.messages.count() for s in sessions),
-                    'total_duration_seconds': total_duration,
-                    'last_activity': latest_session.start_time.strftime("%d/%m/%Y %H:%M"),
-                    'latest_session_url': reverse('session-detail', args=[latest_session.id])
-                })
-            
-            student_data = {
+            sessions_for_student = student.chatsession_set.all()
+
+            if selected_document_id:
+                # Vue par exercice
+                sessions_for_doc = sessions_for_student.filter(document_id=selected_document_id)
+                if sessions_for_doc.exists():
+                    latest_session = sessions_for_doc.latest('start_time')
+                    total_duration = sum(((s.end_time - s.start_time).total_seconds() for s in sessions_for_doc if s.end_time), 0)
+                    aggregated_errors = defaultdict(int)
+                    for s in sessions_for_doc:
+                        if s.summary_data and 'error_analysis' in s.summary_data:
+                            for error, count in s.summary_data['error_analysis'].items():
+                                aggregated_errors[error] += count
+
+                    performance_details.append({
+                        'doc_title': latest_session.document.title,
+                        'attempts': sessions_for_doc.count(),
+                        'message_count': sum(s.messages.count() for s in sessions_for_doc),
+                        'total_duration_seconds': total_duration,
+                        'aggregated_errors': dict(aggregated_errors),
+                        'last_activity': latest_session.start_time.strftime("%d/%m/%Y %H:%M"),
+                    })
+            else:
+                # Vue agrégée "Tous les exercices"
+                if sessions_for_student.exists():
+                    error_key_map = {
+                        "Erreurs de calcul": "calcul",
+                        "Erreurs de substitution": "substitution",
+                        "Erreurs de procédure": "procedure",
+                        "Erreurs conceptuelles": "conceptuelle",
+                    }
+                    total_duration = sum(((s.end_time - s.start_time).total_seconds() for s in sessions_for_student if s.end_time), 0)
+                    aggregated_errors = defaultdict(int)
+                    for s in sessions_for_student:
+                        if s.summary_data and 'error_analysis' in s.summary_data:
+                            for error, count in s.summary_data['error_analysis'].items():
+                                short_key = error_key_map.get(error)
+                                if short_key:
+                                    aggregated_errors[short_key] += count
+                    
+                    total_errors = sum(aggregated_errors.values())
+                    error_percentages = {err: (count / total_errors) * 100 for err, count in aggregated_errors.items()} if total_errors > 0 else {}
+
+                    performance_details.append({
+                        'is_aggregated': True,
+                        'attempts': sessions_for_student.count(),
+                        'message_count': sum(s.messages.count() for s in sessions_for_student),
+                        'total_duration_seconds': total_duration,
+                        'aggregated_errors': dict(aggregated_errors),
+                        'error_percentages': error_percentages,
+                        'last_activity': sessions_for_student.latest('start_time').start_time.strftime("%d/%m/%Y %H:%M"),
+                    })
+
+            student_performance.append({
                 'student': student,
-                'student_id': student.id,
                 'performance_data': performance_details
-            }
-            student_performance.append(student_data)
+            })
             
         context['student_performance'] = student_performance
+        return context
+
+
+@method_decorator(user_passes_test(is_teacher), name='dispatch')
+class SavedGroupsView(LoginRequiredMixin, TemplateView):
+    """
+    Affiche les configurations de groupes enregistrées pour une classe sélectionnée.
+    """
+    template_name = "dashboard/saved_groups.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Récupérer toutes les classes pour le sélecteur
+        all_classes = Group.objects.exclude(name='Professeurs')
+        context['all_classes'] = all_classes
+
+        selected_class_id = self.request.GET.get('class_id')
+        context['selected_class_id'] = selected_class_id
+
+        if selected_class_id:
+            try:
+                selected_class = Group.objects.get(id=selected_class_id)
+                context['selected_class'] = selected_class
+                context['saved_groups'] = GroupConfiguration.objects.filter(teacher_class=selected_class).order_by('-created_at')
+            except Group.DoesNotExist:
+                context['saved_groups'] = []
+        
         return context
 
 
@@ -144,18 +202,13 @@ class SessionListView(LoginRequiredMixin, TemplateView):
         document_id = self.request.GET.get('document_id')
         sessions = ChatSession.objects.select_related('student', 'document').all().order_by('-start_time')
 
-        # Récupérer tous les élèves (ceux qui ne sont pas professeurs) pour le filtre
-        User = get_user_model()
-        all_students = User.objects.exclude(groups__name='Professeurs').order_by('username')
-        context['all_students'] = all_students
-
         # Récupérer tous les documents pour le filtre
         all_documents = Document.objects.all().order_by('title')
         context['all_documents'] = all_documents
 
         # Si un student_id est passé en paramètre, on l'utilise pour le filtre
         context['filtered_student_id'] = student_id if student_id else ''
-        context['filtered_document_id'] = document_id if student_id else ''
+        context['filtered_document_id'] = document_id if document_id else ''
 
         if student_id:
             sessions = sessions.filter(student_id=student_id)
@@ -188,7 +241,7 @@ class SessionDetailView(LoginRequiredMixin, DetailView):
         session.teacher_notes = notes
         session.save()
         # Redirige vers la même page pour voir la confirmation
-        return redirect('session-detail', session_id=session.id)
+        return redirect('dashboard:session-detail', session_id=session.id)
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class SessionChatContentView(LoginRequiredMixin, View):
@@ -221,47 +274,15 @@ class SessionSummaryView(LoginRequiredMixin, View):
             id=session_id
         )
 
-        # Construire l'historique de la conversation
-        chat_history = ""
-        for msg in session.messages.order_by('timestamp'):
-            role = "Élève" if msg.role == 'user' else "Tuteur"
-            content_text = ""
-            # Le contenu peut être une liste de dictionnaires (texte/image)
-            if isinstance(msg.content, list):
-                for item in msg.content:
-                    if item.get('type') == 'text':
-                        content_text += item.get('text', '') + " "
-            elif isinstance(msg.content, str): # Ancien format
-                content_text = msg.content
-            
-            chat_history += f"{role}: {content_text.strip()}\n"
-
-        # Prompt pour l'IA
-        prompt = f"""
-        Analyse la conversation suivante entre un tuteur et un élève.
-        Contexte de l'exercice:
-        - Question: {session.question_context}
-        - Solution: {session.solution_context}
-
-        Conversation:
-        {chat_history}
-
-        Génère un résumé pour un enseignant au format JSON. Le JSON doit contenir :
-        1. Une clé "error_analysis" : un objet où chaque clé est un type d'erreur (ex: "Erreur de calcul", "Mauvaise application de formule", "Incompréhension du concept") et la valeur est le nombre d'occurrences.
-        2. Une clé "summary_text" : un court paragraphe résumant les échanges, les difficultés de l'élève et son évolution.
-        """
-
-        try:
-            client = OpenAI() # Assurez-vous que OPENAI_API_KEY est dans vos variables d'environnement
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "system", "content": prompt}],
-                response_format={"type": "json_object"}
-            )
-            summary_data = json.loads(response.choices[0].message.content)
-            return JsonResponse(summary_data)
-        except Exception as e:
-            return JsonResponse({'error': f"Erreur lors de la génération du résumé: {str(e)}"}, status=500)
+        # La génération est maintenant automatique. On vérifie si le résumé est prêt.
+        if session.summary_data:
+            return JsonResponse(session.summary_data)
+        elif session.end_time:
+            # La session est terminée mais le résumé n'est pas encore là
+            return JsonResponse({'status': 'processing', 'message': 'Le résumé est en cours de génération. Veuillez réessayer dans quelques instants.'})
+        else:
+            # La session n'est pas encore terminée
+            return JsonResponse({'status': 'not_ended', 'message': 'Le résumé sera généré automatiquement à la fin de la session.'})
 
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
@@ -380,3 +401,88 @@ class StudentActionView(LoginRequiredMixin, View):
             return JsonResponse({'success': True, 'student_id': user_id})
 
         return JsonResponse({'error': 'Action non valide.'}, status=400)
+
+
+@method_decorator(user_passes_test(is_teacher), name='dispatch')
+class CreateStudentGroupsView(LoginRequiredMixin, View):
+    """
+    Vue API pour interagir avec l'IA afin de créer des groupes d'élèves.
+    """
+    def post(self, request, *args, **kwargs):
+        data = json.loads(request.body)
+        class_id = data.get('class_id')
+        num_groups = data.get('num_groups')
+        messages = data.get('messages', [])
+
+        if not class_id or not num_groups:
+            return JsonResponse({'error': 'ID de classe et nombre de groupes requis.'}, status=400)
+
+        try:
+            teacher_class = Group.objects.get(id=class_id)
+        except Group.DoesNotExist:
+            return JsonResponse({'error': 'Classe non trouvée.'}, status=404)
+
+        # 1. Récupérer les élèves et leurs performances globales
+        students = get_user_model().objects.filter(groups=teacher_class)
+        student_data_for_prompt = []
+        for student in students:
+            all_sessions = list(student.chatsession_set.all())
+            if not all_sessions:
+                student_data_for_prompt.append(f"- {student.username}: Aucune session.")
+                continue
+
+            total_duration = sum(((s.end_time - s.start_time).total_seconds() for s in all_sessions if s.end_time), 0)
+            aggregated_errors = defaultdict(int)
+            for s in all_sessions:
+                if s.summary_data and 'error_analysis' in s.summary_data:
+                    for error, count in s.summary_data['error_analysis'].items():
+                        aggregated_errors[error] += count
+            
+            student_data_for_prompt.append(
+                f"- {student.username}: {len(all_sessions)} sessions, "
+                f"{int(total_duration / 60)} min au total, "
+                f"erreurs fréquentes: {json.dumps(dict(aggregated_errors))}"
+            )
+
+        # 2. Construire le prompt pour l'IA
+        system_prompt = f"""
+        Tu es un assistant pédagogique expert. Un enseignant souhaite créer {num_groups} groupes de travail pour sa classe "{teacher_class.name}".
+        Ton objectif est de proposer une répartition équilibrée (hétérogène par défaut) en te basant sur leurs performances. Toutes tes réponses doivent être en français.
+
+        Voici les données des élèves de la classe :
+        {chr(10).join(student_data_for_prompt)}
+
+        Interagis avec l'enseignant pour affiner la répartition.
+        À la fin, tu dois fournir la répartition finale UNIQUEMENT sous forme d'un objet JSON avec la clé "groups", qui est une liste de listes de noms d'élèves.
+        Exemple pour 2 groupes: {{"groups": [["Alice", "Bob"], ["Charlie", "David"]]}}
+        
+        Commence la conversation en proposant une première répartition et en expliquant brièvement ta logique.
+        """
+
+        api_messages = [{"role": "system", "content": system_prompt}] + messages
+
+        try:
+            client = OpenAI()
+            response = client.chat.completions.create(model="gpt-4o", messages=api_messages)
+            ai_response = response.choices[0].message.content
+            return JsonResponse({'reply': ai_response})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+
+@method_decorator(user_passes_test(is_teacher), name='dispatch')
+class SaveGroupConfigurationView(LoginRequiredMixin, View):
+    """
+    Vue API pour sauvegarder une configuration de groupes d'élèves.
+    """
+    def post(self, request, *args, **kwargs):
+        data = json.loads(request.body)
+        class_id = data.get('class_id')
+        config_name = data.get('name')
+        groups = data.get('groups')
+
+        if not all([class_id, config_name, groups]):
+            return JsonResponse({'error': 'Données manquantes.'}, status=400)
+
+        GroupConfiguration.objects.create(teacher_class_id=class_id, name=config_name, configuration=groups)
+        return JsonResponse({'success': True, 'message': 'Configuration des groupes enregistrée.'})

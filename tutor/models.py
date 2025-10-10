@@ -13,6 +13,7 @@ class ChatSession(models.Model):
     solution_context = models.TextField()
     start_time = models.DateTimeField(auto_now_add=True)
     end_time = models.DateTimeField(null=True, blank=True)
+    summary_data = models.JSONField(null=True, blank=True) # Pour stocker le résumé de l'IA
 
     def __str__(self):
         return f"Session de {self.student.username} le {self.start_time.strftime('%d/%m/%Y')}"

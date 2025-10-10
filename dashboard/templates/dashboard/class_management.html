@@ -124,22 +124,13 @@
 {{ block.super }}
 <script>
     // URLs pour les appels API
-    const classCreateUrl = "{% url 'class-create' %}";
-    const classActionUrlTemplate = "{% url 'class-action' 0 %}".replace('0', ''); // Template /api/classes/ID/action/
-    const studentCreateUrl = "{% url 'student-create' %}";
-    const studentActionUrlTemplate = "{% url 'student-action' 0 %}".replace('0', ''); // Template /api/students/ID/action/
+    const classCreateUrl = "{% url 'dashboard:class-create' %}";
+    const classActionUrlTemplate = "{% url 'dashboard:class-action' 0 %}".replace('0', ''); // Template /api/classes/ID/action/
+    const studentCreateUrl = "{% url 'dashboard:student-create' %}";
+    const studentActionUrlTemplate = "{% url 'dashboard:student-action' 0 %}".replace('0', ''); // Template /api/students/ID/action/
     const csrfToken = "{{ csrf_token }}";
 </script>
 {# Chemin vers le JavaScript spécifique à cette page #}
 <script src="{% static 'dashboard/class_management.js' %}"></script>
 {% endblock %}
 
-```
-
-### 4. Création du CSS et du JavaScript
-
-Je vais créer les fichiers statiques nécessaires.
-
-**`dashboard/static/dashboard/class_management.css`**
-
-```diff
