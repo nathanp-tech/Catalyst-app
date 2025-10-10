@@ -14,6 +14,7 @@ class ChatSession(models.Model):
     start_time = models.DateTimeField(auto_now_add=True)
     end_time = models.DateTimeField(null=True, blank=True)
     summary_data = models.JSONField(null=True, blank=True) # Pour stocker le résumé de l'IA
+    whiteboard_state = models.JSONField(null=True, blank=True) # Pour stocker l'état du tableau blanc
 
     def __str__(self):
         return f"Session de {self.student.username} le {self.start_time.strftime('%d/%m/%Y')}"

@@ -7,18 +7,29 @@
     <title>{% block title %}Catalyst{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
     {% block head_extra %}{% endblock %}
+    <style>
+        .nav-username {
+            color: #fff;
+            margin-right: 15px;
+            font-weight: 500;
+            display: inline !important; /* Assure que le nom est toujours visible */
+            opacity: 0.8;
+        }
+    </style>
 </head>
 <body>
     <header>
         <nav class="navbar">
             <div class="logo">
                 <a href="{% url 'home' %}">Catalyst 🚀</a>
+                <span>Bonjour, {{ user.username }}</span>
             </div>
             <div class="nav-links">
-                {% if user.is_staff %}
-                  <a href="{% url 'admin:index' %}">Admin</a>
-                {% endif %}
                 {% if user.is_authenticated %}
+                    {% if user.is_staff %}
+                        <a href="{% url 'admin:index' %}">Admin</a>
+                    {% endif %}
+                    
                     <a href="{% url 'dashboard:dashboard' %}">Tableau de Bord</a>
                     <a href="{% url 'logout' %}">Déconnexion</a>
                 {% else %}

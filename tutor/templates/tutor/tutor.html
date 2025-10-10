@@ -77,9 +77,6 @@
                         <button id="zoomInBtn" title="Zoom avant"><i class="fas fa-search-plus"></i></button>
                         <button id="zoomResetBtn" title="Réinitialiser le zoom"><i class="fas fa-expand"></i></button>
                     </div>
-                    <button id="changeExerciseBtn" title="Changer d'exercice">
-                        <i class="fas fa-exchange-alt"></i>
-                    </button>
                     <button id="endExerciseBtn" class="end-exercise-btn" title="Terminer l'exercice">
                         <i class="fas fa-flag-checkered"></i>
                         <span>Terminer</span>
@@ -104,6 +101,14 @@
                     </div>
                     <div class="tool-divider"></div>
                     <div class="tool-group">
+                        <button id="lineTool" class="tool" title="Ligne"><i class="fas fa-minus"></i></button>
+                        <button id="rectTool" class="tool" title="Rectangle"><i class="far fa-square"></i></button>
+                        <button id="circleTool" class="tool" title="Cercle"><i class="far fa-circle"></i></button>
+                        <button id="textTool" class="tool" title="Texte"><i class="fas fa-font"></i></button>
+                        <button id="selectTool" class="tool" title="Sélectionner"><i class="fas fa-mouse-pointer"></i></button>
+                    </div>
+                    <div class="tool-divider"></div>
+                    <div class="tool-group">
                         <input type="color" id="colorPicker" value="#000000" title="Couleur">
                     </div>
                     <div class="tool-divider"></div>
@@ -113,6 +118,11 @@
                     </div>
                     <div class="tool-divider"></div>
                     <button id="clearCanvasBtn" class="tool clear-btn" title="Effacer tout"><i class="fas fa-trash-alt"></i></button>
+                    <div class="tool-divider"></div>
+                    <div class="tool-group">
+                        <button id="undoBtn" class="tool" title="Annuler"><i class="fas fa-undo"></i></button>
+                        <button id="redoBtn" class="tool" title="Rétablir"><i class="fas fa-redo"></i></button>
+                    </div>
                     <div class="tool-divider"></div>
                     <button id="fullscreenBtn" class="tool" title="Plein écran"><i class="fas fa-expand"></i></button>
                 </div>
@@ -140,6 +150,7 @@
         analyzeImageUrl: "{% url 'tutor-analyze-image' %}",
         endSessionUrl: "{% url 'tutor-end-session' %}",
         tutorInteractUrl: "{% url 'tutor-interact' %}",
+        saveWhiteboardUrl: "{% url 'tutor-save-whiteboard' %}",
         getHintUrl: "{% url 'tutor-get-hint' %}",
         csrfToken: "{{ csrf_token }}"
     };
@@ -149,7 +160,8 @@
     {
         "ongoing_session": {{ ongoing_session|default:False|yesno:"true,false" }},
         "initial_chat_history": {{ chat_history_json|default:"null"|safe }},
-        "exercise_document": {{ exercise_document_json|default:"null"|safe }}
+        "exercise_document": {{ exercise_document_json|default:"null"|safe }},
+        "whiteboard_state": {{ whiteboard_state_json|default:"null"|safe }}
     }
 </script>
 

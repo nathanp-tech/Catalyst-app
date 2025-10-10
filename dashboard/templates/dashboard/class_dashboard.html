@@ -116,6 +116,15 @@
             width: var(--width, 0%);
         }
 
+        [class*="error-continuum-"] {
+            width: var(--width, 0%);
+            color: white;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
         .error-continuum {
             display: flex;
             width: 100%;
@@ -305,6 +314,24 @@
             margin-bottom: 8px;
             background-color: #f8f9fa;
         }
+
+        .results-header {
+            display: flex;
+            align-items: baseline;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .results-header h2 {
+            margin: 0;
+        }
+        .global-stats-label {
+            font-size: 1rem;
+            font-weight: 400;
+            color: var(--text-muted);
+            background-color: var(--primary-light);
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+        }
     </style>
 {% endblock %}
 
@@ -344,7 +371,10 @@
 
 {% if selected_group %}
     <div class="results-header">
-        <h2>Classe : {{ selected_group.name }}</h2>
+        <h2>{{ selected_group.name }}</h2>
+        {% if not selected_document_id %}
+            <span class="global-stats-label">Statistiques Globales</span>
+        {% endif %}
     </div>
     <div class="student-grid" id="student-grid-container">
         {% for data in student_performance %}
@@ -367,10 +397,18 @@
                             <div class="error-summary">
                                 <h5><i class="fas fa-chart-pie"></i> Répartition des erreurs</h5>
                                 <div class="error-continuum">
-                                    <div class="error-continuum-calcul" style="--width: {{ performance.error_percentages.calcul|default:0 }}%;" title="Calcul: {{ performance.aggregated_errors.calcul|default:0 }}"></div>
-                                    <div class="error-continuum-substitution" style="--width: {{ performance.error_percentages.substitution|default:0 }}%;" title="Substitution: {{ performance.aggregated_errors.substitution|default:0 }}"></div>
-                                    <div class="error-continuum-procedure" style="--width: {{ performance.error_percentages.procedure|default:0 }}%;" title="Procédure: {{ performance.aggregated_errors.procedure|default:0 }}"></div>
-                                    <div class="error-continuum-conceptuelle" style="--width: {{ performance.error_percentages.conceptuelle|default:0 }}%;" title="Conceptuelle: {{ performance.aggregated_errors.conceptuelle|default:0 }}"></div>
+                                    {% with percentage=performance.error_percentages.calcul|default:0 %}
+                                    <div class="error-continuum-calcul" style="--width: {{ percentage }}%;" title="Calcul: {{ performance.aggregated_errors.calcul|default:0 }}">{% if percentage > 10 %}{{ percentage|floatformat:0 }}%{% endif %}</div>
+                                    {% endwith %}
+                                    {% with percentage=performance.error_percentages.substitution|default:0 %}
+                                    <div class="error-continuum-substitution" style="--width: {{ percentage }}%;" title="Substitution: {{ performance.aggregated_errors.substitution|default:0 }}">{% if percentage > 10 %}{{ percentage|floatformat:0 }}%{% endif %}</div>
+                                    {% endwith %}
+                                    {% with percentage=performance.error_percentages.procedure|default:0 %}
+                                    <div class="error-continuum-procedure" style="--width: {{ percentage }}%;" title="Procédure: {{ performance.aggregated_errors.procedure|default:0 }}">{% if percentage > 10 %}{{ percentage|floatformat:0 }}%{% endif %}</div>
+                                    {% endwith %}
+                                    {% with percentage=performance.error_percentages.conceptuelle|default:0 %}
+                                    <div class="error-continuum-conceptuelle" style="--width: {{ percentage }}%;" title="Conceptuelle: {{ performance.aggregated_errors.conceptuelle|default:0 }}">{% if percentage > 10 %}{{ percentage|floatformat:0 }}%{% endif %}</div>
+                                    {% endwith %}
                                 </div>
                                 <ul class="error-legend">
                                     <li><span class="legend-dot" style="background-color: #3498db;"></span> Calcul</li>

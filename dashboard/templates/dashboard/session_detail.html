@@ -45,7 +45,7 @@
             <p><strong>Document:</strong> {{ session.document.title|default:"N/A" }}</p>
             <p><strong>Date:</strong> {{ session.start_time|date:"d F Y, H:i" }}</p>
             <div class="actions">
-                <a href="{% url 'session-list' %}">&larr; Retour à la liste des sessions</a>
+                <a href="{% url 'dashboard:session-list' %}">&larr; Retour à la liste des sessions</a>
                 <button id="downloadPdfBtn" class="validate-btn" style="background-color: var(--secondary-color);"><i class="fas fa-file-pdf"></i> Télécharger en PDF</button>
             </div>
         </div>
@@ -61,7 +61,7 @@
                                 {% if item.type == 'text' %}
                                     <div class="comment-text">{{ item.text }}</div>
                                 {% elif item.type == 'image_url' %}
-                                    <img src="{{ item.image_url.url }}" alt="Réponse de l'élève">
+                                    <img src="{{ item.url }}" alt="Réponse de l'élève sur le tableau blanc">
                                 {% endif %}
                             {% endfor %}
                         {% endif %}

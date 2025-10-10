@@ -263,6 +263,21 @@ class SessionChatContentView(LoginRequiredMixin, View):
 
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
+class DeleteSessionView(LoginRequiredMixin, View):
+    """
+    Vue API pour supprimer une session de chat.
+    """
+    def delete(self, request, *args, **kwargs):
+        session_id = kwargs.get('session_id')
+        try:
+            session = ChatSession.objects.get(id=session_id)
+            session.delete()
+            return JsonResponse({'success': True, 'message': 'Session supprimée avec succès.'})
+        except ChatSession.DoesNotExist:
+            return JsonResponse({'error': 'Session non trouvée.'}, status=404)
+
+
+@method_decorator(user_passes_test(is_teacher), name='dispatch')
 class SessionSummaryView(LoginRequiredMixin, View):
     """
     Vue API qui génère un résumé de la session via l'IA pour l'enseignant.

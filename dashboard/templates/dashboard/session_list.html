@@ -54,6 +54,12 @@
             font-size: 1.4rem;
             margin-left: 15px;
         }
+        .delete-icon {
+            cursor: pointer;
+            color: var(--accent-color);
+            font-size: 1.2rem;
+            margin-left: 15px;
+        }
         .download-icon:hover, .summary-icon:hover {
             transform: scale(1.1);
         }
@@ -183,6 +189,9 @@
                          title="Télécharger en PDF">
                         <i class="fas fa-file-pdf"></i>
                     </div>
+                    <div class="delete-icon" data-session-id="{{ session.id }}" title="Supprimer la session">
+                        <i class="fas fa-trash-alt"></i>
+                    </div>
                 </td>
                 <td><a href="{% url 'dashboard:session-detail' session.id %}">Voir la conversation</a></td>
             </tr>
@@ -221,6 +230,18 @@
                 const iconContainer = event.currentTarget;
                 const { sessionId, studentSlug } = iconContainer.dataset;
                 downloadSessionPDF(iconContainer.querySelector('i'), sessionId, studentSlug);
+            });
+        });
+
+        // Logique pour la suppression de session
+        const deleteIcons = document.querySelectorAll('.delete-icon');
+        deleteIcons.forEach(icon => {
+            icon.addEventListener('click', (event) => {
+                const iconContainer = event.currentTarget;
+                const sessionId = iconContainer.dataset.sessionId;
+                if (confirm("Êtes-vous sûr de vouloir supprimer cette session ? Cette action est irréversible.")) {
+                    deleteSession(iconContainer, sessionId);
+                }
             });
         });
 
@@ -311,6 +332,33 @@
             // 6. Nettoyer et restaurer l'icône
             document.getElementById('pdf-render-container').innerHTML = '';
             iconElement.className = originalIconClass;
+        }
+    }
+
+    /**
+     * Supprime une session via un appel API.
+     * @param {HTMLElement} iconContainer - L'élément icône qui a été cliqué.
+     * @param {string} sessionId - L'ID de la session à supprimer.
+     */
+    async function deleteSession(iconContainer, sessionId) {
+        try {
+            const response = await fetch(`/dashboard/api/sessions/${sessionId}/delete/`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                // Supprimer la ligne du tableau de l'interface
+                iconContainer.closest('tr').remove();
+            } else {
+                throw new Error(data.error || 'Erreur inconnue');
+            }
+        } catch (error) {
+            console.error("Erreur lors de la suppression de la session:", error);
+            alert(`Impossible de supprimer la session : ${error.message}`);
         }
     }
 </script>

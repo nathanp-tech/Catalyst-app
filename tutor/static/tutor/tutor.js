@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const startExerciseBtn = document.getElementById('startExerciseBtn');
     const questionCard = document.getElementById('questionCard');
     const questionImageDisplay = document.getElementById('questionImageDisplay');
-    const changeExerciseBtn = document.getElementById('changeExerciseBtn');
     const endExerciseBtn = document.getElementById('endExerciseBtn');
     const chatbox = document.getElementById('chatbox');
     const textInput = document.getElementById('textInput');
@@ -16,6 +15,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvasContainer = document.getElementById('canvas-container');
     const penTool = document.getElementById('penTool');
     const eraserTool = document.getElementById('eraserTool');
+    const lineTool = document.getElementById('lineTool');
+    const rectTool = document.getElementById('rectTool');
+    const circleTool = document.getElementById('circleTool');
+    const textTool = document.getElementById('textTool');
+    const selectTool = document.getElementById('selectTool');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
     const colorPicker = document.getElementById('colorPicker');
     const sizeSlider = document.getElementById('sizeSlider');
     const clearCanvasBtn = document.getElementById('clearCanvasBtn');
@@ -41,7 +47,12 @@ document.addEventListener('DOMContentLoaded', () => {
         eraserSize: 20,
         tool: 'pen',
     };
+    let history = [];
+    let redoStack = [];
+    let isDrawingShape = false;
+    let shapeStartPoint = null;
     let currentPdf = null;
+    let saveInterval = null;
     let currentPageNum = 1;
     let totalPages = 1;
     let questionZoomLevel = 1;
@@ -69,6 +80,12 @@ document.addEventListener('DOMContentLoaded', () => {
             chatHistory = sessionData.initial_chat_history;
             renderChatHistory();
         }
+        if (sessionData.whiteboard_state) {
+            // Attendre que le canvas soit prêt
+            setTimeout(() => {
+                fabricCanvas.loadFromJSON(sessionData.whiteboard_state, fabricCanvas.renderAll.bind(fabricCanvas));
+            }, 200);
+        }
         if (sessionData.exercise_document) {
             const documentUrl = sessionData.exercise_document.url;
             welcomeScreen.classList.add('hidden');
@@ -81,6 +98,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (sendBtn) sendBtn.disabled = false;
             if (hintBtn) hintBtn.disabled = false;
+
+            // Démarrer la sauvegarde automatique
+            if (saveInterval) clearInterval(saveInterval);
+            saveInterval = setInterval(saveWhiteboardState, 15000); // Sauvegarde toutes les 15 secondes
         }
     }
 
@@ -161,6 +182,10 @@ document.addEventListener('DOMContentLoaded', () => {
             renderChatHistory();
             if (sendBtn) sendBtn.disabled = false;
             if (hintBtn) hintBtn.disabled = false;
+
+            // Démarrer la sauvegarde automatique
+            if (saveInterval) clearInterval(saveInterval);
+            saveInterval = setInterval(saveWhiteboardState, 15000);
         } catch (err) {
             console.error(err);
             alert("Une erreur est survenue lors de la préparation de l'exercice. Veuillez réessayer.");
@@ -196,9 +221,20 @@ document.addEventListener('DOMContentLoaded', () => {
         fabricCanvas.on('mouse:down', () => { document.body.classList.add('drawing-active'); });
         fabricCanvas.on('mouse:up', () => { document.body.classList.remove('drawing-active'); });
         fabricCanvas.on('mouse:out', () => { document.body.classList.remove('drawing-active'); });
+        
+        // Gestion de l'historique
+        fabricCanvas.on('object:added', saveState);
+        fabricCanvas.on('object:modified', saveState);
+        fabricCanvas.on('object:removed', saveState);
+
+        // Gestion du dessin de formes
+        fabricCanvas.on('mouse:down', startDrawingShape);
+        fabricCanvas.on('mouse:move', continueDrawingShape);
+        fabricCanvas.on('mouse:up', stopDrawingShape);
 
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
+        saveState(); // Sauvegarde l'état initial vide
     }
 
     function resizeCanvas() {
@@ -212,11 +248,20 @@ document.addEventListener('DOMContentLoaded', () => {
     function setTool(tool) {
         if (!fabricCanvas) return;
         
+        // Désactiver le mode dessin pour les outils qui ne l'utilisent pas
+        fabricCanvas.isDrawingMode = (tool === 'pen' || tool === 'eraser');
+        fabricCanvas.selection = (tool === 'select');
+        fabricCanvas.defaultCursor = (tool === 'select') ? 'default' : 'crosshair';
+
         whiteboardState.tool = tool;
         fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
 
-        penTool.classList.toggle('active', tool === 'pen');
-        eraserTool.classList.toggle('active', tool === 'eraser');
+        // Gérer l'état actif des boutons
+        document.querySelectorAll('.toolbar .tool').forEach(t => t.classList.remove('active'));
+        const activeToolBtn = document.getElementById(`${tool}Tool`);
+        if (activeToolBtn) activeToolBtn.classList.add('active');
+        if (tool === 'select') selectTool.classList.add('active');
+
         thicknessIcon.className = tool === 'pen' ? 'fas fa-pen-nib' : 'fas fa-eraser';
         
         if (tool === 'pen') {
@@ -246,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (whiteboardState.tool === 'pen') {
             whiteboardState.penSize = currentSize;
-        } else if (tool === 'eraser') {
+        } else if (whiteboardState.tool === 'eraser') {
             whiteboardState.eraserSize = currentSize;
         }
         fabricCanvas.freeDrawingBrush.width = currentSize;
@@ -257,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
             fabricCanvas.clear();
             fabricCanvas.backgroundColor = 'white';
             fabricCanvas.renderAll();
+            saveState();
         }
     }
 
@@ -294,6 +340,131 @@ document.addEventListener('DOMContentLoaded', () => {
             icon.className = 'fas fa-expand';
         }
     }
+
+    // --- LOGIQUE POUR LES NOUVEAUX OUTILS ---
+
+    function startDrawingShape(o) {
+        if (['line', 'rect', 'circle'].includes(whiteboardState.tool)) {
+            isDrawingShape = true;
+            shapeStartPoint = fabricCanvas.getPointer(o.e);
+        }
+    }
+
+    function continueDrawingShape(o) {
+        if (!isDrawingShape) return;
+        const pointer = fabricCanvas.getPointer(o.e);
+        
+        // Supprimer la forme temporaire précédente
+        const tempShape = fabricCanvas.getObjects().find(obj => obj.isTemp);
+        if (tempShape) fabricCanvas.remove(tempShape);
+
+        let newShape;
+        if (whiteboardState.tool === 'line') {
+            newShape = new fabric.Line([shapeStartPoint.x, shapeStartPoint.y, pointer.x, pointer.y], {
+                stroke: whiteboardState.penColor,
+                strokeWidth: whiteboardState.penSize,
+            });
+        } else if (whiteboardState.tool === 'rect') {
+            newShape = new fabric.Rect({
+                left: Math.min(shapeStartPoint.x, pointer.x),
+                top: Math.min(shapeStartPoint.y, pointer.y),
+                width: Math.abs(pointer.x - shapeStartPoint.x),
+                height: Math.abs(pointer.y - shapeStartPoint.y),
+                fill: 'transparent',
+                stroke: whiteboardState.penColor,
+                strokeWidth: whiteboardState.penSize,
+            });
+        } else if (whiteboardState.tool === 'circle') {
+            const radius = Math.sqrt(Math.pow(pointer.x - shapeStartPoint.x, 2) + Math.pow(pointer.y - shapeStartPoint.y, 2)) / 2;
+            newShape = new fabric.Circle({
+                left: shapeStartPoint.x - radius,
+                top: shapeStartPoint.y - radius,
+                radius: radius,
+                fill: 'transparent',
+                stroke: whiteboardState.penColor,
+                strokeWidth: whiteboardState.penSize,
+            });
+        }
+
+        if (newShape) {
+            newShape.isTemp = true; // Marquer comme temporaire
+            fabricCanvas.add(newShape);
+            fabricCanvas.renderAll();
+        }
+    }
+
+    function stopDrawingShape(o) {
+        if (isDrawingShape) {
+            // Remplacer la forme temporaire par la forme finale
+            const tempShape = fabricCanvas.getObjects().find(obj => obj.isTemp);
+            if (tempShape) {
+                tempShape.isTemp = false;
+                fabricCanvas.renderAll();
+                // L'événement 'object:added' est déjà déclenché, donc l'état est sauvegardé.
+            }
+            isDrawingShape = false;
+            shapeStartPoint = null;
+        }
+    }
+
+    function addText() {
+        const text = new fabric.IText('Tapez ici', {
+            left: 100,
+            top: 100,
+            fill: whiteboardState.penColor,
+            fontSize: 20,
+        });
+        fabricCanvas.add(text);
+        fabricCanvas.setActiveObject(text);
+        setTool('select'); // Passer en mode sélection pour éditer le texte
+    }
+
+    // --- LOGIQUE ANNULER/RÉTABLIR (UNDO/REDO) ---
+
+    function saveState() {
+        redoStack = []; // Vider la pile de rétablissement à chaque nouvelle action
+        redoBtn.disabled = true;
+        history.push(fabricCanvas.toJSON());
+        undoBtn.disabled = history.length <= 1;
+    }
+
+    function undo() {
+        if (history.length > 1) {
+            redoStack.push(history.pop());
+            const prevState = history[history.length - 1];
+            fabricCanvas.loadFromJSON(prevState, fabricCanvas.renderAll.bind(fabricCanvas));
+            redoBtn.disabled = false;
+            undoBtn.disabled = history.length <= 1;
+        }
+    }
+
+    function redo() {
+        if (redoStack.length > 0) {
+            const nextState = redoStack.pop();
+            history.push(nextState);
+            fabricCanvas.loadFromJSON(nextState, fabricCanvas.renderAll.bind(fabricCanvas));
+            undoBtn.disabled = false;
+            redoBtn.disabled = redoStack.length === 0;
+        }
+    }
+
+    async function saveWhiteboardState() {
+        if (!fabricCanvas || !window.APP_CONFIG.saveWhiteboardUrl) return;
+
+        const whiteboardStateJSON = fabricCanvas.toJSON();
+        try {
+            await fetch(window.APP_CONFIG.saveWhiteboardUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.APP_CONFIG.csrfToken
+                },
+                body: JSON.stringify({ whiteboard_state: whiteboardStateJSON })
+            });
+        } catch (error) {
+            console.error("Erreur lors de la sauvegarde du tableau blanc:", error);
+        }
+    }
     // ===================================================================
     // ===                    GESTION DU CHAT                          ===
     // ===================================================================
@@ -317,6 +488,9 @@ document.addEventListener('DOMContentLoaded', () => {
         displayLoadingIndicator();
         textInput.value = '';
         clearCanvas();
+
+        // Sauvegarder l'état du tableau blanc juste après l'envoi
+        await saveWhiteboardState();
 
         try {
             const res = await fetch(window.APP_CONFIG.tutorInteractUrl, {
@@ -387,7 +561,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         if (startExerciseBtn) startExerciseBtn.addEventListener('click', startExercise);
-        if (changeExerciseBtn) changeExerciseBtn.addEventListener('click', () => window.location.reload());
         if (endExerciseBtn) {
             endExerciseBtn.addEventListener('click', async () => {
                 if (!confirm("Es-tu sûr de vouloir terminer ?")) return;
@@ -409,6 +582,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (penTool) penTool.addEventListener('click', () => setTool('pen'));
         if (eraserTool) eraserTool.addEventListener('click', () => setTool('eraser'));
+        if (lineTool) lineTool.addEventListener('click', () => setTool('line'));
+        if (rectTool) rectTool.addEventListener('click', () => setTool('rect'));
+        if (circleTool) circleTool.addEventListener('click', () => setTool('circle'));
+        if (textTool) textTool.addEventListener('click', addText);
+        if (selectTool) selectTool.addEventListener('click', () => setTool('select'));
+        if (undoBtn) undoBtn.addEventListener('click', undo);
+        if (redoBtn) redoBtn.addEventListener('click', redo);
         if (colorPicker) colorPicker.addEventListener('input', () => setColor(colorPicker.value));
         if (sizeSlider) sizeSlider.addEventListener('input', () => setSize(sizeSlider.value));
         if (clearCanvasBtn) clearCanvasBtn.addEventListener('click', clearCanvas);

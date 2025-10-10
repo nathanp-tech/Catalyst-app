@@ -5,7 +5,7 @@ import os
 import json
 from django.core.serializers.json import DjangoJSONEncoder
 from openai import OpenAI
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.shortcuts import redirect
 from rest_framework import status
 from rest_framework.response import Response
@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from django.views.generic import TemplateView
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect
+from django.shortcuts import get_object_or_404
 from django.utils.timezone import now
 from .models import ChatSession, ChatMessage
 from documents.models import Document
@@ -58,6 +59,9 @@ class TutorPageView(TemplateView):
                         'title': session.document.title,
                         'url': session.document.file.url
                     })
+                if session.whiteboard_state:
+                    context['whiteboard_state_json'] = json.dumps(session.whiteboard_state)
+
                 
                 self.request.session['exercise_context'] = {
                     'question': session.question_context,
@@ -154,30 +158,39 @@ class TutorImageAnalysisView(OpenAIAPIView):
             return Response({"error": "Une erreur est survenue lors de l'analyse de l'image."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class TutorInteractionView(OpenAIAPIView):
+class BaseTutorAPIView(OpenAIAPIView):
     """
-    Gère une interaction avec le tuteur IA après le début de l'exercice.
+    Classe de base pour les vues d'API du tuteur qui partagent une logique commune.
     """
     @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
-        chat_session_id = request.session.get('chat_session_id')
-        exercise_context = request.session.get('exercise_context')
-        client_messages = request.data.get("messages")
+        self.chat_session_id = request.session.get('chat_session_id')
+        self.exercise_context = request.session.get('exercise_context')
+        self.client_messages = request.data.get("messages")
 
-        if not all([chat_session_id, exercise_context, client_messages]):
+        if not all([self.chat_session_id, self.exercise_context, self.client_messages]):
             return Response({"error": "La session est invalide ou les messages sont manquants."}, status=status.HTTP_400_BAD_REQUEST)
 
-        user_message_content = client_messages[-1]['content']
-        chat_session = ChatSession.objects.get(id=chat_session_id)
-        ChatMessage.objects.create(session=chat_session, role='user', content=user_message_content)
+        self.chat_session = get_object_or_404(ChatSession, id=self.chat_session_id)
+        return self.handle_logic(request, *args, **kwargs)
+
+    def handle_logic(self, request, *args, **kwargs):
+        raise NotImplementedError("Les sous-classes doivent implémenter handle_logic.")
+
+
+class TutorInteractionView(BaseTutorAPIView):
+    """Gère une interaction normale avec le tuteur IA."""
+    def handle_logic(self, request, *args, **kwargs):
+        user_message_content = self.client_messages[-1]['content']
+        ChatMessage.objects.create(session=self.chat_session, role='user', content=user_message_content)
         request.session['hint_level'] = 1
 
         system_prompt = f"""
         Tu es un tuteur de mathématiques bienveillant et Socratique. Ton objectif est de guider l'élève sans jamais lui donner la réponse. Toutes tes réponses doivent être en français.
         
         Voici le contexte de l'exercice :
-        - La question est : "{exercise_context['question']}"
-        - La solution correcte est : "{exercise_context['solution']}"
+        - La question est : "{self.exercise_context['question']}"
+        - La solution correcte est : "{self.exercise_context['solution']}"
 
         Tes règles d'or sont :
         1.  **Ne jamais donner la réponse directe** ou la prochaine étape.
@@ -192,7 +205,7 @@ class TutorInteractionView(OpenAIAPIView):
         
         # Logique de formatage de l'historique pour l'API
         processed_messages = []
-        for msg in client_messages:
+        for msg in self.client_messages:
             new_msg = {'role': msg['role']}
             # Si le contenu est une liste (avec potentiellement des images), on le garde tel quel.
             if isinstance(msg['content'], list):
@@ -222,10 +235,10 @@ class TutorInteractionView(OpenAIAPIView):
             )
 
             assistant_reply_text = completion.choices[0].message.content
-            assistant_reply_structured = assistant_reply_text # Stocker le texte brut
+            assistant_reply_structured = [{"type": "text", "text": assistant_reply_text}]
             
             ChatMessage.objects.create(
-                session=chat_session,
+                session=self.chat_session,
                 role='assistant',
                 content=assistant_reply_structured
             )
@@ -236,19 +249,9 @@ class TutorInteractionView(OpenAIAPIView):
             return Response({"error": "Une erreur est survenue lors de la communication avec l'IA."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class TutorHintView(OpenAIAPIView):
-    """
-    Génère un indice pour l'élève en fonction du niveau de difficulté.
-    """
-    @method_decorator(csrf_protect)
-    def post(self, request, *args, **kwargs):
-        chat_session_id = request.session.get('chat_session_id')
-        exercise_context = request.session.get('exercise_context')
-        client_messages = request.data.get("messages")
-
-        if not all([chat_session_id, exercise_context, client_messages]):
-            return Response({"error": "Session invalide ou messages manquants."}, status=status.HTTP_400_BAD_REQUEST)
-
+class TutorHintView(BaseTutorAPIView):
+    """Génère un indice pour l'élève."""
+    def handle_logic(self, request, *args, **kwargs):
         hint_level = request.session.get('hint_level', 1)
         
         level_descriptions = {
@@ -260,10 +263,10 @@ class TutorHintView(OpenAIAPIView):
         hint_prompt = f"""
         Tu es un tuteur de mathématiques. L'élève a demandé un indice.
         Contexte de l'exercice:
-        - Question: {exercise_context['question']}
-        - Solution: {exercise_context['solution']}
+        - Question: {self.exercise_context['question']}
+        - Solution: {self.exercise_context['solution']}
 
-        Voici l'historique de la conversation: {json.dumps(client_messages)}
+        Voici l'historique de la conversation: {json.dumps(self.client_messages)}
 
         Génère un indice de {level_descriptions.get(hint_level, level_descriptions[3])}.
         L'indice doit être une question ouverte qui guide l'élève. Ne donne JAMAIS la réponse.
@@ -278,10 +281,9 @@ class TutorHintView(OpenAIAPIView):
                 max_tokens=200
             )
             hint_reply_text = completion.choices[0].message.content
-            hint_reply_structured = hint_reply_text # Stocker le texte brut
+            hint_reply_structured = [{"type": "text", "text": hint_reply_text}]
 
-            chat_session = ChatSession.objects.get(id=chat_session_id)
-            ChatMessage.objects.create(session=chat_session, role='assistant', content=hint_reply_structured)
+            ChatMessage.objects.create(session=self.chat_session, role='assistant', content=hint_reply_structured)
 
             request.session['hint_level'] = min(hint_level + 1, 3)
             return Response({"content": hint_reply_structured}, status=status.HTTP_200_OK)
@@ -316,3 +318,26 @@ class EndSessionView(APIView):
         
         # Voici la ligne corrigée :
         return Response({'redirect_url': reverse('dashboard:dashboard')}, status=status.HTTP_200_OK)
+
+
+class SaveWhiteboardView(APIView):
+    """
+    Sauvegarde l'état actuel du tableau blanc pour une session donnée.
+    """
+    @method_decorator(csrf_protect)
+    def post(self, request, *args, **kwargs):
+        chat_session_id = request.session.get('chat_session_id')
+        whiteboard_data = request.data.get('whiteboard_state')
+
+        if not chat_session_id or whiteboard_data is None:
+            return Response({"error": "Données manquantes."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            session = ChatSession.objects.get(id=chat_session_id)
+            session.whiteboard_state = whiteboard_data
+            session.save(update_fields=['whiteboard_state'])
+            return Response({"success": True}, status=status.HTTP_200_OK)
+        except ChatSession.DoesNotExist:
+            return Response({"error": "Session non trouvée."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

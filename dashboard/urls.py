@@ -15,6 +15,8 @@ urlpatterns = [
     path('api/sessions/<int:session_id>/content/', SessionChatContentView.as_view(), name='session-chat-content'),
     # NOUVELLE URL: API pour générer un résumé de la session
     path('api/sessions/<int:session_id>/summary/', SessionSummaryView.as_view(), name='session-summary'),
+    # NOUVELLE URL: API pour supprimer une session
+    path('api/sessions/<int:session_id>/delete/', DeleteSessionView.as_view(), name='session-delete'),
 
     # URLs pour la gestion des classes et des élèves
     path('manage-classes/', ClassManagementView.as_view(), name='manage-classes'),
