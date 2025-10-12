@@ -7,13 +7,105 @@
     <title>{% block title %}Catalyst{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
     {% block head_extra %}{% endblock %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
+        :root {
+            --primary-color: #4A90E2; /* Un bleu moderne et confiant */
+            --secondary-color: #50E3C2; /* Un turquoise frais pour les accents */
+            --background-color: #F8F9FA; /* Un gris très clair pour le fond */
+            --card-bg: #FFFFFF;
+            --text-color: #343A40;
+            --text-muted: #6C757D;
+            --header-color: #2C3E50;
+            --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        header {
+            background-color: var(--card-bg);
+            box-shadow: var(--shadow-sm);
+            padding: 0 2rem;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .logo a {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
         .nav-username {
-            color: #fff;
+            color: var(--text-muted);
             margin-right: 15px;
             font-weight: 500;
-            display: inline !important; /* Assure que le nom est toujours visible */
-            opacity: 0.8;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--header-color);
+            font-weight: 500;
+            position: relative;
+            padding: 5px 0;
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background-color: var(--primary-color);
+            transition: width 0.3s ease;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        main {
+            flex-grow: 1;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            box-sizing: border-box;
+        }
+
+        footer {
+            background-color: var(--header-color);
+            color: white;
+            text-align: center;
+            padding: 1.5rem;
+            margin-top: auto;
         }
     </style>
 </head>
@@ -22,14 +114,13 @@
         <nav class="navbar">
             <div class="logo">
                 <a href="{% url 'home' %}">Catalyst 🚀</a>
-                <span>Bonjour, {{ user.username }}</span>
             </div>
             <div class="nav-links">
                 {% if user.is_authenticated %}
+                    <span class="nav-username"><i class="fas fa-user-circle"></i> Bonjour, {{ user.username }}</span>
                     {% if user.is_staff %}
                         <a href="{% url 'admin:index' %}">Admin</a>
                     {% endif %}
-                    
                     <a href="{% url 'dashboard:dashboard' %}">Tableau de Bord</a>
                     <a href="{% url 'logout' %}">Déconnexion</a>
                 {% else %}

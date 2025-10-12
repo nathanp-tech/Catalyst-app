@@ -13,8 +13,25 @@ class ChatSession(models.Model):
     solution_context = models.TextField()
     start_time = models.DateTimeField(auto_now_add=True)
     end_time = models.DateTimeField(null=True, blank=True)
-    summary_data = models.JSONField(null=True, blank=True) # Pour stocker le résumé de l'IA
-    whiteboard_state = models.JSONField(null=True, blank=True) # Pour stocker l'état du tableau blanc
+    summary_data = models.JSONField(null=True, blank=True, help_text="Résumé et analyse d'erreur générés par l'IA.")
+    whiteboard_state = models.JSONField(null=True, blank=True, help_text="Dernier état sauvegardé du tableau blanc.")
+
+    # Nouveaux champs pour le diagnostic de l'enseignant
+    TEACHER_ERROR_CHOICES = [
+        ('calcul', 'Erreur de calcul'),
+        ('substitution', 'Erreur de substitution'),
+        ('procedure', 'Erreur de procédure'),
+        ('conceptuelle', 'Erreur conceptuelle'),
+        ('autre', 'Autre'),
+    ]
+    teacher_analysis = models.JSONField(null=True, blank=True, help_text="Analyse structurée de l'enseignant. Contient 'error_analysis', 'notes', 'divergence_analysis', 'remediation_strategy', 'ai_influence_rating'.")
+
+    AI_INFLUENCE_CHOICES = [
+        (1, 'Pas du tout'),
+        (2, 'Un peu'),
+        (3, 'Moyennement'),
+        (4, 'Beaucoup'),
+    ]
 
     def __str__(self):
         return f"Session de {self.student.username} le {self.start_time.strftime('%d/%m/%Y')}"

@@ -1,0 +1,175 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Co-Analyse de la Session{% endblock %}
+
+{% block head_extra %}
+    <link rel="stylesheet" href="{% static 'tutor/tutor.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        .co-analysis-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            max-width: 1600px;
+            margin: auto;
+        }
+        .chat-column, .analysis-column {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .analysis-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+        }
+        .analysis-card h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-light);
+            padding-bottom: 0.5rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        .form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .error-inputs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        .diagnosis-box {
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        .diagnosis-box h4 {
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .convergence {
+            border-left: 4px solid #28a745; /* Vert */
+        }
+        .divergence {
+            border-left: 4px solid #dc3545; /* Rouge */
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1><i class="fas fa-microscope"></i> Co-Analyse de la Session</h1>
+    <p>Session de <strong>{{ session.student.username }}</strong> sur l'exercice <strong>{{ session.document.title|default:"personnalisé" }}</strong> du {{ session.start_time|date:"d/m/Y" }}.</p>
+</div>
+
+<div class="co-analysis-container">
+    <div class="chat-column">
+        <div class="chat-container" style="height: 80vh;">
+            <div id="chatbox">
+                {% for message in session.messages.all %}
+                    <div class="chat-message {% if message.role == 'assistant' %}tutor{% else %}user{% endif %}">
+                        {% if message.role == 'assistant' %}
+                            {% for item in message.content %}<div class="comment-text">{{ item.text }}</div>{% endfor %}
+                        {% else %}
+                            {% for item in message.content %}
+                                {% if item.type == 'text' %}
+                                    <div class="comment-text">{{ item.text }}</div>
+                                {% elif item.type == 'image_url' %}
+                                    <img src="{{ item.url }}" alt="Réponse de l'élève sur le tableau blanc">
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="analysis-column">
+        {% if not session.teacher_analysis %}
+            <!-- Phase 1: Diagnostic de l'enseignant -->
+            <div class="analysis-card">
+                <h3><i class="fas fa-user-md"></i> Mon Diagnostic</h3>
+                <form method="post">
+                    {% csrf_token %}
+                    <label>Nombre d'erreurs identifiées :</label>
+                    <div class="error-inputs-grid">
+                        {% for value, name in error_choices %}
+                        <div class="form-group">
+                            <label for="error_count_{{ value }}">{{ name }}</label>
+                            <input type="number" name="error_count_{{ value }}" id="error_count_{{ value }}" min="0" value="0" style="width: 80px;">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="form-group">
+                        <label for="teacher_diagnostic_notes">Analyse et commentaires :</label>
+                        <textarea name="teacher_diagnostic_notes" id="teacher_diagnostic_notes" placeholder="Décrivez votre analyse du raisonnement de l'élève..."></textarea>
+                    </div>
+                    <button type="submit" class="validate-btn">Révéler & Comparer avec l'IA</button>
+                </form>
+            </div>
+        {% else %}
+            <!-- Phase 2: Comparaison -->
+            <div class="analysis-card">
+                <h3><i class="fas fa-balance-scale"></i> Diagnostics Croisés</h3>
+                <div class="comparison-grid">
+                    <div class="diagnosis-box">
+                        <h4><i class="fas fa-user-md"></i> Mon Diagnostic</h4>
+                        {% if session.teacher_analysis.error_analysis %}
+                            <p><strong>Types d'erreurs détectés :</strong></p>
+                            <ul>
+                                {% for error, count in session.teacher_analysis.error_analysis.items %}
+                                    <li>{{ error|capfirst }}: {{ count }} occurrence(s)</li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p>Aucune erreur quantifiée.</p>
+                        {% endif %}
+                        <p><strong>Notes :</strong> {{ session.teacher_analysis.notes|linebreaksbr|default:"Aucune note." }}</p>
+                    </div>
+                    <div class="diagnosis-box">
+                        <h4><i class="fas fa-robot"></i> Diagnostic de l'IA</h4>
+                        {% if ai_error_analysis %}
+                            <p><strong>Types d'erreurs détectés :</strong></p>
+                            <ul>
+                                {% for error, count in ai_error_analysis.items %}
+                                    <li>{{ error }}: {{ count }} occurrence(s)</li>
+                                {% endfor %}
+                            </ul>
+                            <p><strong>Résumé :</strong> {{ ai_summary_text }}</p>
+                        {% else %}
+                            <p>L'IA n'a pas encore généré de résumé pour cette session.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

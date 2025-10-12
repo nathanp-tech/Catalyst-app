@@ -6,11 +6,14 @@ app_name = 'dashboard'
 urlpatterns = [
     # Le nom 'dashboard' est utilisé dans settings.py pour LOGIN_REDIRECT_URL
     path("", DashboardView.as_view(), name="dashboard"),
+    path('my-progression/', StudentProgressionView.as_view(), name='my-progression'),
+    path('logbooks/', LogbookListView.as_view(), name='logbook-list'),
 
     # URLs pour le suivi des sessions par le professeur
     path('class-dashboard/', ClassDashboardView.as_view(), name='class-dashboard'),
     path('sessions/', SessionListView.as_view(), name='session-list'),
     path('sessions/<int:session_id>/', SessionDetailView.as_view(), name='session-detail'),
+    path('sessions/<int:pk>/co-analysis/', CoAnalysisView.as_view(), name='co-analysis'),
     # NOUVELLE URL: API pour récupérer le contenu du chat
     path('api/sessions/<int:session_id>/content/', SessionChatContentView.as_view(), name='session-chat-content'),
     # NOUVELLE URL: API pour générer un résumé de la session
@@ -27,4 +30,5 @@ urlpatterns = [
     path('api/students/<int:user_id>/action/', StudentActionView.as_view(), name='student-action'),
     path('api/create-student-groups/', CreateStudentGroupsView.as_view(), name='create-student-groups'),
     path('api/save-group-configuration/', SaveGroupConfigurationView.as_view(), name='save-group-configuration'),
+    path('api/class-analytics/<int:class_id>/', ClassAnalyticsAPIView.as_view(), name='class-analytics-api'),
 ]

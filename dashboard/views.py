@@ -5,6 +5,7 @@ from django.template.loader import render_to_string
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import user_passes_test
 from django.urls import reverse
+from datetime import timedelta
 from documents.models import Document
 from django.db.models import Q
 from django.contrib.auth.models import Group
@@ -57,6 +58,101 @@ class DashboardView(LoginRequiredMixin, View):
 def is_teacher(user):
     """Vérifie si l'utilisateur est un professeur."""
     return is_user_in_group(user, 'Professeurs')
+
+
+class StudentProgressionView(LoginRequiredMixin, TemplateView):
+    """
+    Affiche une page de progression gamifiée pour l'élève.
+    """
+    template_name = "dashboard/student_progression.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        student = self.request.user
+        sessions = ChatSession.objects.filter(student=student).order_by('start_time')
+
+        # --- 1. Statistiques générales ---
+        total_sessions = sessions.count()
+        total_duration_seconds = sum(((s.end_time - s.start_time).total_seconds() for s in sessions if s.end_time), 0)
+        total_messages = sum(s.messages.count() for s in sessions)
+
+        context['total_sessions'] = total_sessions
+        context['total_duration_minutes'] = int(total_duration_seconds / 60)
+        context['total_messages'] = total_messages
+
+        # --- 2. Analyse des erreurs (pour les graphiques) ---
+        error_key_map = {
+            "Erreurs de calcul": "calcul", "Erreurs de substitution": "substitution",
+            "Erreurs de procédure": "procedure", "Erreurs conceptuelles": "conceptuelle",
+        }
+        overall_error_counts = defaultdict(int)
+        errors_over_time = defaultdict(lambda: defaultdict(int)) # {week_start_date: {error_type: count}}
+
+        for session in sessions:
+            if session.summary_data and 'error_analysis' in session.summary_data:
+                # Pour le graphique circulaire global
+                for error, count in session.summary_data['error_analysis'].items():
+                    short_key = error_key_map.get(error)
+                    if short_key:
+                        overall_error_counts[short_key] += count
+                
+                # Pour le graphique d'évolution
+                week_start = session.start_time.date() - timedelta(days=session.start_time.weekday())
+                for error, count in session.summary_data['error_analysis'].items():
+                    short_key = error_key_map.get(error)
+                    if short_key:
+                        errors_over_time[week_start][short_key] += count
+
+        context['overall_error_counts_json'] = json.dumps(overall_error_counts)
+        
+        # Formater les données pour le graphique d'évolution
+        sorted_weeks = sorted(errors_over_time.keys())
+        evolution_data = {
+            'labels': [week.strftime('%d/%m') for week in sorted_weeks],
+            'datasets': {
+                'calcul': [errors_over_time[week]['calcul'] for week in sorted_weeks],
+                'substitution': [errors_over_time[week]['substitution'] for week in sorted_weeks],
+                'procedure': [errors_over_time[week]['procedure'] for week in sorted_weeks],
+                'conceptuelle': [errors_over_time[week]['conceptuelle'] for week in sorted_weeks],
+            }
+        }
+        context['error_evolution_json'] = json.dumps(evolution_data)
+
+        # --- 3. Gamification : Badges ---
+        badges = []
+        if total_sessions >= 1:
+            badges.append({'name': 'Premier Pas', 'icon': 'fa-shoe-prints', 'desc': 'Avoir terminé sa première session.'})
+        if total_sessions >= 10:
+            badges.append({'name': 'Apprenti Sérieux', 'icon': 'fa-graduation-cap', 'desc': 'Avoir terminé 10 sessions.'})
+        if total_duration_seconds >= 3600: # 1 heure
+            badges.append({'name': 'Marathonien', 'icon': 'fa-stopwatch', 'desc': 'Avoir passé plus d\'une heure à apprendre.'})
+        if len(set(s.document_id for s in sessions if s.document_id)) >= 5:
+            badges.append({'name': 'Explorateur', 'icon': 'fa-compass', 'desc': 'Avoir travaillé sur 5 exercices différents.'})
+        
+        context['badges'] = badges
+        context['points'] = total_sessions * 10 + int(total_duration_seconds / 60) # Simple calcul de points
+
+        return context
+
+
+@method_decorator(user_passes_test(is_teacher), name='dispatch')
+class LogbookListView(LoginRequiredMixin, TemplateView):
+    """
+    Affiche la liste de tous les journaux de bord pédagogiques remplis par l'enseignant.
+    """
+    template_name = "dashboard/logbook_list.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # On ne récupère que les sessions où l'enseignant a rempli au moins une partie du journal
+        # et qui appartiennent aux élèves de cet enseignant (implicitement via les documents)
+        sessions_with_logbooks = ChatSession.objects.filter(
+            teacher_analysis__isnull=False
+        ).exclude(
+            teacher_analysis__exact={}
+        ).select_related('student', 'document').order_by('-start_time')
+        context['sessions'] = sessions_with_logbooks
+        return context
 
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
@@ -200,7 +296,7 @@ class SessionListView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         student_id = self.request.GET.get('student_id')
         document_id = self.request.GET.get('document_id')
-        sessions = ChatSession.objects.select_related('student', 'document').all().order_by('-start_time')
+        sessions = ChatSession.objects.select_related('student', 'document').prefetch_related('student__groups').all().order_by('-start_time')
 
         # Récupérer tous les documents pour le filtre
         all_documents = Document.objects.all().order_by('title')
@@ -235,11 +331,26 @@ class SessionDetailView(LoginRequiredMixin, DetailView):
         # S'assurer que les données associées sont chargées efficacement
         return ChatSession.objects.select_related('student', 'document').prefetch_related('messages')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['ai_influence_choices'] = ChatSession.AI_INFLUENCE_CHOICES
+        return context
+
     def post(self, request, *args, **kwargs):
         session = self.get_object()
-        notes = request.POST.get('teacher_notes', '')
-        session.teacher_notes = notes
+        
+        # Récupérer l'analyse existante ou initialiser un dictionnaire
+        teacher_analysis_data = session.teacher_analysis or {}
+
+        # Mettre à jour avec les données du formulaire du journal de bord
+        teacher_analysis_data['divergence_analysis'] = request.POST.get('divergence_analysis', '')
+        teacher_analysis_data['remediation_strategy'] = request.POST.get('remediation_strategy', '')
+        teacher_analysis_data['ai_influence_rating'] = request.POST.get('ai_influence_rating')
+        teacher_analysis_data['general_notes'] = request.POST.get('general_notes', '')
+
+        session.teacher_analysis = teacher_analysis_data
         session.save()
+        
         # Redirige vers la même page pour voir la confirmation
         return redirect('dashboard:session-detail', session_id=session.id)
 
@@ -260,6 +371,43 @@ class SessionChatContentView(LoginRequiredMixin, View):
             {'session': session, 'is_pdf_render': True}
         )
         return JsonResponse({'html': html_content})
+
+
+@method_decorator(user_passes_test(is_teacher), name='dispatch')
+class CoAnalysisView(LoginRequiredMixin, DetailView):
+    """
+    Affiche l'interface de co-analyse Enseignant-IA pour une session.
+    """
+    model = ChatSession
+    template_name = 'dashboard/co_analysis.html'
+    context_object_name = 'session'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['error_choices'] = ChatSession.TEACHER_ERROR_CHOICES
+        # S'assure que le résumé IA est disponible pour la comparaison
+        if self.object.summary_data and 'error_analysis' in self.object.summary_data:
+            context['ai_error_analysis'] = self.object.summary_data['error_analysis']
+            context['ai_summary_text'] = self.object.summary_data.get('summary_text', "Aucun résumé textuel fourni par l'IA.")
+        return context
+
+    def post(self, request, *args, **kwargs):
+        session = self.get_object()
+        
+        error_analysis = {}
+        for key, _ in ChatSession.TEACHER_ERROR_CHOICES:
+            count = request.POST.get(f'error_count_{key}')
+            if count and int(count) > 0:
+                error_analysis[key] = int(count)
+
+        teacher_analysis_data = {
+            'error_analysis': error_analysis,
+            'notes': request.POST.get('teacher_diagnostic_notes', '')
+        }
+        session.teacher_analysis = teacher_analysis_data
+        session.save()
+        # Redirige vers la même page pour voir le résultat de la comparaison
+        return redirect('dashboard:co-analysis', pk=session.pk)
 
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
@@ -501,3 +649,55 @@ class SaveGroupConfigurationView(LoginRequiredMixin, View):
 
         GroupConfiguration.objects.create(teacher_class_id=class_id, name=config_name, configuration=groups)
         return JsonResponse({'success': True, 'message': 'Configuration des groupes enregistrée.'})
+
+
+@method_decorator(user_passes_test(is_teacher), name='dispatch')
+class ClassAnalyticsAPIView(LoginRequiredMixin, View):
+    """
+    Fournit des données agrégées pour les graphiques d'analyse de la classe.
+    """
+    def get(self, request, class_id, *args, **kwargs):
+        try:
+            teacher_class = Group.objects.get(id=class_id)
+        except Group.DoesNotExist:
+            return JsonResponse({'error': 'Classe non trouvée.'}, status=404)
+
+        # Utiliser l'annotation pour des performances optimales
+        students_with_stats = get_user_model().objects.filter(groups=teacher_class).annotate(
+            total_sessions=Count('chatsession'),
+            total_messages=Count('chatsession__messages'),
+            # Note: L'agrégation de la durée et des erreurs JSON reste plus complexe
+            # et peut nécessiter une boucle, mais les comptes simples sont optimisés.
+        )
+
+        analytics_data = []
+        error_key_map = {
+            "Erreurs de calcul": "calcul", "Erreurs de substitution": "substitution",
+            "Erreurs de procédure": "procedure", "Erreurs conceptuelles": "conceptuelle",
+        }
+
+        for student in students_with_stats:
+            sessions = student.chatsession_set.all()
+            total_duration = sum(((s.end_time - s.start_time).total_seconds() for s in sessions if s.end_time), 0)
+
+            error_counts = defaultdict(int)
+            for s in sessions:
+                if s.summary_data and 'error_analysis' in s.summary_data:
+                    for error, count in s.summary_data['error_analysis'].items():
+                        short_key = error_key_map.get(error)
+                        if short_key:
+                            error_counts[short_key] += count
+
+            analytics_data.append({
+                'student_name': student.username,
+                'total_sessions': student.total_sessions, # Donnée annotée
+                'total_duration_minutes': int(total_duration / 60),
+                'total_messages': student.total_messages, # Donnée annotée
+                'total_errors': sum(error_counts.values()),
+                'error_distribution': dict(error_counts)
+            })
+
+        return JsonResponse({
+            'class_name': teacher_class.name,
+            'analytics': analytics_data
+        })

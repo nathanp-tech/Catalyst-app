@@ -37,10 +37,32 @@
             text-decoration: none;
             font-weight: 500;
         }
-        .action-icons {
+        .actions-cell {
             display: flex;
             align-items: center;
             justify-content: center;
+            gap: 8px;
+        }
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border-radius: 6px;
+            text-decoration: none;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .action-btn.view-btn { color: #fff; background-color: var(--primary-color); }
+        .action-btn.analysis-btn { color: #fff; background-color: #50E3C2; }
+        .action-btn.pdf-btn { color: #fff; background-color: #6c757d; }
+        .action-btn.delete-btn { color: #fff; background-color: var(--accent-color); }
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
         .download-icon {
             cursor: pointer;
@@ -168,32 +190,29 @@
         <thead>
             <tr>
                 <th>Élève</th>
+                <th>Classe</th>
                 <th>Document</th>
-                <th>Date de début</th>
-                <th>Nombre de messages</th>
+                <th>Début</th>
+                <th style="text-align: center;">Messages</th>
                 <th style="text-align: center;">Actions</th>
-                <th>Action</th>
             </tr>
         </thead>
         <tbody>
             {% for session in sessions %}
             <tr>
                 <td>{{ session.student.username }}</td>
+                <td>{{ session.student.groups.first.name|default:"N/A" }}</td>
                 <td>{{ session.document.title|default:"N/A" }}</td>
-                <td>{{ session.start_time|date:"d/m/Y H:i" }}</td>
+                <td>{{ session.start_time|date:"d/m H:i" }}</td>
                 <td style="text-align: center;">{{ session.messages.count }}</td>                
-                <td class="action-icons">
-                    <div class="download-icon" 
-                         data-session-id="{{ session.id }}" 
-                         data-student-slug="{{ session.student.username|slugify }}"
-                         title="Télécharger en PDF">
-                        <i class="fas fa-file-pdf"></i>
-                    </div>
-                    <div class="delete-icon" data-session-id="{{ session.id }}" title="Supprimer la session">
-                        <i class="fas fa-trash-alt"></i>
-                    </div>
+                <td class="actions-cell">
+                    <a href="{% url 'dashboard:session-detail' session.id %}" class="action-btn view-btn" title="Voir la conversation brute"><i class="fas fa-eye"></i> Voir</a>
+                    <a href="{% url 'dashboard:co-analysis' session.id %}" class="action-btn analysis-btn" title="Lancer la co-analyse"><i class="fas fa-microscope"></i> Analyser</a>
+                    <button class="action-btn pdf-btn download-icon" data-session-id="{{ session.id }}" data-student-slug="{{ session.student.username|slugify }}" title="Télécharger en PDF">
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </button>
+                    <button class="action-btn delete-btn delete-icon" data-session-id="{{ session.id }}" title="Supprimer la session"><i class="fas fa-trash-alt"></i></button>
                 </td>
-                <td><a href="{% url 'dashboard:session-detail' session.id %}">Voir la conversation</a></td>
             </tr>
             {% empty %}
             <tr>

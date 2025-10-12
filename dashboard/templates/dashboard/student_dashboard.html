@@ -22,7 +22,7 @@
         <p>Posez une question, explorez un nouveau sujet ou entraînez-vous.</p>
     </a>
 
-    <a href="#" class="dashboard-card">
+    <a href="{% url 'dashboard:my-progression' %}" class="dashboard-card">
         <div class="card-icon">📈</div>
         <h2>Ma Progression</h2>
         <p>Visualisez vos statistiques et vos derniers résultats de quiz.</p>
@@ -157,7 +157,10 @@
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
-        background-color: var(--secondary-color);
+        background-color: #6c757d; /* Couleur grise pour "Reprendre" (sessions terminées) */
+    }
+    .session-action-btn.in-progress-btn {
+        background-color: var(--primary-color); /* Couleur principale pour "Continuer" (sessions en cours) */
     }
     .session-action-btn:hover {
         transform: translateY(-2px);

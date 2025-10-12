@@ -1,60 +1,117 @@
 {% extends "core/base.html" %}
 {% load static %}
 
-{% block title %}Bienvenue sur Catalyst{% endblock %}
+{% block title %}Accueil - Catalyst{% endblock %}
 
 {% block head_extra %}
-<style>
-    .hero {
-        text-align: center;
-        padding: 60px 20px;
-        background-color: var(--card-bg);
-        border-radius: var(--border-radius);
-        margin-top: 2rem;
-        box-shadow: var(--shadow);
-    }
-    .hero h1 {
-        font-size: 2.8rem;
-        color: var(--primary-color);
-        margin-bottom: 20px;
-    }
-    .hero p {
-        font-size: 1.2rem;
-        max-width: 700px;
-        margin: 0 auto 30px auto;
-        color: #555;
-        line-height: 1.7;
-    }
-    .hero .cta-buttons {
-        display: flex;
-        justify-content: center;
-        gap: 20px;
-    }
-    .hero .cta-button {
-        display: inline-block;
-        padding: 12px 25px;
-        font-size: 1.1rem;
-        text-decoration: none;
-        border-radius: 5px;
-        transition: all 0.3s ease;
-        border: 2px solid var(--primary-color);
-    }
-    .hero .cta-primary { background-color: var(--primary-color); color: white; }
-    .hero .cta-secondary { background-color: transparent; color: var(--primary-color); }
-    .hero .cta-primary:hover { background-color: var(--secondary-color); border-color: var(--secondary-color); }
-    .hero .cta-secondary:hover { background-color: var(--primary-color); color: white; }
-</style>
+    <style>
+        .hero-section {
+            text-align: center;
+            padding: 6rem 2rem;
+            background: linear-gradient(45deg, var(--primary-color), #50E3C2);
+            color: white;
+            border-radius: 12px;
+            margin-bottom: 3rem;
+        }
+        .hero-section h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .hero-section p {
+            font-size: 1.25rem;
+            max-width: 700px;
+            margin: 0 auto 2rem auto;
+            opacity: 0.9;
+        }
+        .hero-actions .validate-btn {
+            font-size: 1.1rem;
+            padding: 0.8rem 2rem;
+            margin: 0 0.5rem;
+            border-radius: 50px;
+            text-decoration: none;
+        }
+        .hero-actions .primary-action {
+            background-color: white;
+            color: var(--primary-color);
+        }
+        .hero-actions .secondary-action {
+            background-color: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+
+        .features-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            text-align: center;
+        }
+        .feature-card {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+        }
+        .feature-card .icon {
+            font-size: 3rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+        .feature-card h3 {
+            font-size: 1.5rem;
+            color: var(--header-color);
+            margin-bottom: 0.5rem;
+        }
+        .feature-card p {
+            color: var(--text-muted);
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
-<div class="hero">
-    <h1>Bienvenue sur Catalyst 🚀</h1>
-    <p>
-        Votre assistant personnel pour l'apprentissage. Utilisez notre tuteur IA pour poser des questions, générer des quiz et suivre votre progression. Catalyst est conçu pour vous aider à maîtriser n'importe quel sujet, à votre propre rythme.
-    </p>
-    <div class="cta-buttons">
-        <a href="{% url 'login' %}" class="cta-button cta-secondary">Se connecter</a>
-        <a href="{% url 'signup' %}" class="cta-button cta-primary">Créer un compte</a>
+<div class="hero-section">
+    <h1>Bienvenue sur Catalyst</h1>
+    <p>Votre assistant pédagogique intelligent pour transformer les erreurs en opportunités d'apprentissage.</p>
+    <div class="hero-actions">
+        <a href="{% url 'signup' %}" class="validate-btn primary-action">Créer un compte</a>
+        <a href="{% url 'login' %}" class="validate-btn secondary-action">Se connecter</a>
+    </div>
+</div>
+
+<div class="features-section">
+    <div class="feature-card">
+        <div class="icon"><i class="fas fa-robot"></i></div>
+        <h3>Tuteur IA Personnalisé</h3>
+        <p>Un accompagnement en temps réel qui guide les élèves sans jamais donner la solution, favorisant une compréhension profonde.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon"><i class="fas fa-chart-pie"></i></div>
+        <h3>Analyse d'Erreurs Détaillée</h3>
+        <p>Des diagnostics automatiques pour aider les enseignants à comprendre les difficultés de chaque élève et de la classe.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon"><i class="fas fa-users"></i></div>
+        <h3>Outils de Collaboration</h3>
+        <p>Créez des groupes de travail hétérogènes ou homogènes en vous appuyant sur les analyses de performance de l'IA.</p>
     </div>
 </div>
 {% endblock %}
+
+```
+
+### Résumé des améliorations
+
+1.  **Redirection intelligente :** Si vous êtes connecté, cliquer sur le logo vous amènera directement à votre tableau de bord, ce qui est beaucoup plus logique.
+2.  **Nouvelle page d'accueil pour les visiteurs :**
+    *   **Section "Héros" :** Un grand bandeau coloré et moderne accueille les nouveaux utilisateurs avec un message clair sur la mission de votre application.
+    *   **Appels à l'action :** Des boutons bien visibles incitent à "Créer un compte" ou "Se connecter".
+    *   **Présentation des fonctionnalités :** Trois cartes élégantes mettent en avant les points forts de votre outil (Tuteur IA, Analyse d'Erreurs, Outils de Collaboration), expliquant rapidement la valeur ajoutée de Catalyst.
+
+Le résultat est une expérience utilisateur beaucoup plus professionnelle. Votre application a maintenant une "porte d'entrée" digne de ce nom, qui est à la fois esthétique, informative et intelligente.
+
+<!--
+[PROMPT_SUGGESTION]Comment puis-je ajouter une section "Témoignages" sur la nouvelle page d'accueil ?[/PROMPT_SUGGESTION]
+[PROMPT_SUGGESTION]Comment puis-je améliorer le design des cartes de fonctionnalités ?[/PROMPT_SUGGESTION]
+-->

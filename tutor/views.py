@@ -195,7 +195,6 @@ class TutorInteractionView(BaseTutorAPIView):
         Tes règles d'or sont :
         1.  **Ne jamais donner la réponse directe** ou la prochaine étape.
         2.  **Analyser la réponse de l'élève** (image et/ou texte) et identifier les erreurs ou les bonnes idées.
-        3.  **Poser des questions ouvertes** pour l'amener à réfléchir. ("Que penses-tu de cette partie ?", "Comment es-tu arrivé à ce résultat ?", "Y a-t-il une autre façon de voir les choses ?").
         4.  **Donner des indices subtils** si l'élève est bloqué.
         5.  **Féliciter et encourager** l'élève pour ses efforts et ses réussites.
         6.  **Utiliser le tutoiement** et un ton amical.
@@ -247,50 +246,6 @@ class TutorInteractionView(BaseTutorAPIView):
         except Exception as e:
             print(f"Erreur lors de l'appel à OpenAI: {e}")
             return Response({"error": "Une erreur est survenue lors de la communication avec l'IA."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-class TutorHintView(BaseTutorAPIView):
-    """Génère un indice pour l'élève."""
-    def handle_logic(self, request, *args, **kwargs):
-        hint_level = request.session.get('hint_level', 1)
-        
-        level_descriptions = {
-            1: "Niveau 1 (Conceptuel) : Rappelle le grand principe mathématique en jeu sans donner d'étape. Exemple : 'Souviens-toi du théorème de Pythagore...'",
-            2: "Niveau 2 (Stratégique) : Suggère la toute première étape ou l'objectif général à atteindre, sans calcul. Exemple : 'La première chose à faire est d'isoler x.'",
-            3: "Niveau 3 (Spécifique) : Pointe vers une erreur précise dans le dernier calcul de l'élève ou donne un indice très ciblé sur la prochaine action. Exemple: 'Regarde bien la deuxième ligne de ton calcul...'"
-        }
-        
-        hint_prompt = f"""
-        Tu es un tuteur de mathématiques. L'élève a demandé un indice.
-        Contexte de l'exercice:
-        - Question: {self.exercise_context['question']}
-        - Solution: {self.exercise_context['solution']}
-
-        Voici l'historique de la conversation: {json.dumps(self.client_messages)}
-
-        Génère un indice de {level_descriptions.get(hint_level, level_descriptions[3])}.
-        L'indice doit être une question ouverte qui guide l'élève. Ne donne JAMAIS la réponse.
-        Adresse-toi directement à l'élève en le tutoyant.
-        Réponds uniquement en français."""
-
-        try:
-            completion = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "system", "content": hint_prompt}],
-                temperature=0.5,
-                max_tokens=200
-            )
-            hint_reply_text = completion.choices[0].message.content
-            hint_reply_structured = [{"type": "text", "text": hint_reply_text}]
-
-            ChatMessage.objects.create(session=self.chat_session, role='assistant', content=hint_reply_structured)
-
-            request.session['hint_level'] = min(hint_level + 1, 3)
-            return Response({"content": hint_reply_structured}, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            print(f"Erreur lors de la génération de l'indice: {e}")
-            return Response({"error": "Une erreur est survenue lors de la génération de l'indice."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class EndSessionView(APIView):

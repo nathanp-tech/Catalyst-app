@@ -14,6 +14,16 @@ def div(value, arg):
     except (ValueError, ZeroDivisionError):
         return None
 
+@register.filter(name='multiply')
+def multiply(value, arg):
+    """
+    Multiplies the value by the argument.
+    """
+    try:
+        return float(value) * float(arg)
+    except (ValueError, TypeError):
+        return ''
+
 @register.filter(name='jsonify')
 def jsonify(obj):
     return mark_safe(json.dumps(obj))

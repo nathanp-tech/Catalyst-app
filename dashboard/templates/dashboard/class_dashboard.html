@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
     <link rel="stylesheet" href="{% static 'dashboard/class_dashboard.css' %}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -18,6 +19,17 @@
             --border-color: #e9ecef;
             --text-muted: #6c757d;
             --primary-light: #eef5ff;
+        }
+
+        @keyframes card-entry {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .filters-container {
@@ -77,6 +89,8 @@
             color: inherit;
             display: flex;
             flex-direction: column;
+            animation: card-entry 0.5s ease-out forwards;
+            opacity: 0; /* Initialement invisible pour l'animation */
             transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
         }
 
@@ -114,6 +128,7 @@
 
         [class*="error-continuum-"] {
             width: var(--width, 0%);
+            transition: width 0.8s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
         [class*="error-continuum-"] {
@@ -129,7 +144,7 @@
             display: flex;
             width: 100%;
             height: 12px;
-            border-radius: 6px;
+            border-radius: 12px; /* Plus arrondi */
             overflow: hidden;
             margin: 0.5rem 0;
         }
@@ -295,6 +310,20 @@
             margin-top: 0;
         }
 
+        /* Styles pour la modale d'analyse */
+        #analyticsModal .modal-content { max-width: 90%; width: 1200px; }
+        .analytics-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+        .chart-wrapper { height: 450px; position: relative; }
+        .chart-controls { margin-bottom: 1rem; }
+
+        /* Styles pour la liste des groupes sauvegardés dans la modale */
+        .saved-group-list {
+            margin-top: 2rem;
+            text-align: center;
+            color: var(--text-muted);
+            margin-top: 0;
+        }
+
         /* Styles pour la liste des groupes sauvegardés dans la modale */
         .saved-group-list {
             margin-top: 2rem;
@@ -366,6 +395,11 @@
                 <i class="fas fa-users"></i> Créer des groupes
             </button>
         </div>
+        <div class="filter-group" style="flex-grow: 0;">
+            <button type="button" id="openAnalyticsBtn" class="validate-btn" {% if not selected_group %}disabled{% endif %}>
+                <i class="fas fa-chart-bar"></i> Analyser la classe
+            </button>
+        </div>
     </form>
 </div>
 
@@ -379,7 +413,7 @@
     <div class="student-grid" id="student-grid-container">
         {% for data in student_performance %}
             {% with student=data.student performance=data.performance_data.0 %} {# On prend le premier élément de la liste de perfs #}
-            <a href="{% url 'dashboard:session-list' %}?student_id={{ student.id }}{% if selected_document_id %}&document_id={{ selected_document_id }}{% endif %}" class="student-card">
+            <a href="{% url 'dashboard:session-list' %}?student_id={{ student.id }}{% if selected_document_id %}&document_id={{ selected_document_id }}{% endif %}" class="student-card" style="--animation-delay: {{ forloop.counter0|multiply:0.05 }}s;">
                 <div class="student-card-header">
                     <div class="student-avatar">{{ student.username|first|upper }}</div>
                     <h4 class="student-name">{{ student.first_name|default:student.username }}</h4>
@@ -501,6 +535,24 @@
         </div>
     </div>
 </div>
+
+<!-- Modale pour l'analyse de la classe -->
+<div id="analyticsModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2 id="analyticsModalTitle"><i class="fas fa-chart-bar"></i> Analyse de la Classe</h2>
+        <div class="chart-controls">
+            <label for="metricSelector">Comparer les élèves par :</label>
+            <select id="metricSelector">
+                <option value="total_errors">Total des erreurs</option>
+                <option value="total_duration_minutes">Temps total passé</option>
+                <option value="total_sessions">Nombre de sessions</option>
+                <option value="total_messages">Nombre de messages</option>
+            </select>
+        </div>
+        <div id="analyticsChartsContainer" class="analytics-charts"></div>
+    </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -519,9 +571,11 @@ document.addEventListener('DOMContentLoaded', () => {
     window.GROUP_CREATOR_CONFIG = {
         apiUrl: "{% url 'dashboard:create-student-groups' %}",
         saveUrl: "{% url 'dashboard:save-group-configuration' %}",
-        csrfToken: "{{ csrf_token }}"
+        csrfToken: "{{ csrf_token }}",
+        analyticsApiUrlTemplate: "{% url 'dashboard:class-analytics-api' 0 %}".replace('/0/', '/')
     };
 });
 </script>
 <script src="{% static 'dashboard/class_dashboard_groups.js' %}"></script>
+<script src="{% static 'dashboard/class_analytics.js' %}"></script>
 {% endblock %}

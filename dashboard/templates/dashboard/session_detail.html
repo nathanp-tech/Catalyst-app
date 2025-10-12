@@ -27,11 +27,21 @@
             align-items: center;
         }
         #downloadPdfBtn { font-size: 0.9rem; padding: 8px 12px; }
-        .notes-form { margin-top: 20px; }
-        .notes-form textarea {
+        .logbook-form { margin-top: 20px; }
+        .logbook-form .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .logbook-form label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .logbook-form textarea, .logbook-form select {
             width: 100%;
-            min-height: 100px;
             padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
         }
     </style>
 {% endblock %}
@@ -70,12 +80,32 @@
             </div>
         </div>
 
-        <div class="session-summary notes-form">
-            <h3>Notes du professeur (privées)</h3>
+        <div class="session-summary logbook-form">
+            <h3><i class="fas fa-book-open"></i> Journal de Bord Pédagogique</h3>
             <form method="post">
                 {% csrf_token %}
-                <textarea name="teacher_notes" placeholder="Ajoutez vos notes sur cette session...">{{ session.teacher_notes }}</textarea>
-                <button type="submit" class="validate-btn" style="margin-top: 10px;">Enregistrer les notes</button>
+                <div class="form-group">
+                    <label for="divergence_analysis">En quoi le diagnostic de l'IA a-t-il confirmé, infirmé ou enrichi votre propre analyse ?</label>
+                    <textarea name="divergence_analysis" id="divergence_analysis">{{ session.teacher_analysis.divergence_analysis }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="remediation_strategy">Quelle stratégie de remédiation avez-vous choisie pour cet élève (ou ce groupe) et pourquoi ?</label>
+                    <textarea name="remediation_strategy" id="remediation_strategy">{{ session.teacher_analysis.remediation_strategy }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="ai_influence_rating">Dans quelle mesure la suggestion de l'IA a-t-elle influencé votre décision ?</label>
+                    <select name="ai_influence_rating" id="ai_influence_rating">
+                        <option value="">-- Sélectionnez une option --</option>
+                        {% for value, name in ai_influence_choices %}
+                            <option value="{{ value }}" {% if session.teacher_analysis.ai_influence_rating|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="general_notes">Réflexions et notes générales (privées)</label>
+                    <textarea name="general_notes" id="general_notes">{{ session.teacher_analysis.general_notes }}</textarea>
+                </div>
+                <button type="submit" class="validate-btn" style="margin-top: 10px;">Enregistrer le journal</button>
             </form>
         </div>
     </div>

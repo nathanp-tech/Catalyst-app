@@ -183,8 +183,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const studentCards = document.querySelectorAll('.student-card');
         studentCards.forEach(card => {
             const studentName = card.querySelector('.student-name').textContent.trim();
-            const studentId = card.closest('a').href.split('student_id=')[1].split('&')[0];
-            allStudents.set(studentName, studentId);
+            const studentLink = card.closest('a');
+            // Gère le cas où le lien n'existe pas ou n'a pas de student_id
+            const studentIdMatch = studentLink ? studentLink.href.match(/student_id=(\d+)/) : null;
+            if (studentIdMatch) {
+                allStudents.set(studentName, studentIdMatch[1]);
+            }
         });
 
         // 3. Remplir les colonnes si une configuration est fournie

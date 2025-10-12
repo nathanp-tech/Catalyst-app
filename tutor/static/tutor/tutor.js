@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatbox = document.getElementById('chatbox');
     const textInput = document.getElementById('textInput');
     const sendBtn = document.getElementById('sendBtn');
-    const hintBtn = document.getElementById('hintBtn');
     const canvasContainer = document.getElementById('canvas-container');
     const penTool = document.getElementById('penTool');
     const eraserTool = document.getElementById('eraserTool');
@@ -97,7 +96,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (questionImageDisplay) questionImageDisplay.src = uploadedImage;
             }
             if (sendBtn) sendBtn.disabled = false;
-            if (hintBtn) hintBtn.disabled = false;
 
             // Démarrer la sauvegarde automatique
             if (saveInterval) clearInterval(saveInterval);
@@ -181,7 +179,6 @@ document.addEventListener('DOMContentLoaded', () => {
             chatHistory = data.initial_history;
             renderChatHistory();
             if (sendBtn) sendBtn.disabled = false;
-            if (hintBtn) hintBtn.disabled = false;
 
             // Démarrer la sauvegarde automatique
             if (saveInterval) clearInterval(saveInterval);
@@ -478,7 +475,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         sendBtn.disabled = true;
-        hintBtn.disabled = true;
         let userMessageContent = [];
         if (textComment) userMessageContent.push({ type: 'text', text: textComment });
         if (preparedImage) userMessageContent.push({ type: 'image_url', url: preparedImage });
@@ -511,7 +507,6 @@ document.addEventListener('DOMContentLoaded', () => {
             renderChatHistory();
         } finally {
             sendBtn.disabled = false;
-            hintBtn.disabled = false;
         }
     }
     

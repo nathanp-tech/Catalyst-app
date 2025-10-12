@@ -1,0 +1,104 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Mes Journaux de Bord{% endblock %}
+
+{% block head_extra %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        .logbook-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 2rem;
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+        }
+        .logbook-table th, .logbook-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .logbook-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        .logbook-table tbody tr:hover {
+            background-color: var(--primary-light);
+        }
+        .logbook-table td p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        .logbook-table td p strong {
+            color: var(--text-color);
+        }
+        .action-link {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .action-link:hover {
+            text-decoration: underline;
+        }
+        .influence-rating {
+            font-weight: 600;
+        }
+        .rating-1 { color: #6c757d; } /* Pas du tout */
+        .rating-2 { color: #ffc107; } /* Un peu */
+        .rating-3 { color: #fd7e14; } /* Moyennement */
+        .rating-4 { color: #28a745; } /* Beaucoup */
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1><i class="fas fa-book-reader"></i> Mes Journaux de Bord Pédagogiques</h1>
+    <p>Retrouvez ici toutes vos analyses et réflexions sur les sessions de vos élèves.</p>
+</div>
+
+<table class="logbook-table">
+    <thead>
+        <tr>
+            <th>Session</th>
+            <th>Analyse de la divergence</th>
+            <th>Stratégie de remédiation</th>
+            <th>Influence de l'IA</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for session in sessions %}
+        <tr>
+            <td>
+                <p><strong>Élève :</strong> {{ session.student.username }}</p>
+                <p><strong>Exercice :</strong> {{ session.document.title|default:"N/A" }}</p>
+                <p><strong>Date :</strong> {{ session.start_time|date:"d/m/Y" }}</p>
+            </td>
+            <td>{{ session.teacher_analysis.divergence_analysis|truncatewords:20|default:"-" }}</td>
+            <td>{{ session.teacher_analysis.remediation_strategy|truncatewords:20|default:"-" }}</td>
+            <td>
+                {% with rating=session.teacher_analysis.ai_influence_rating|default:0 %}
+                    <span class="influence-rating rating-{{ rating }}">{{ session.get_ai_influence_rating_display|default:"Non défini" }}</span>
+                {% endwith %}
+            </td>
+            <td>
+                <a href="{% url 'dashboard:session-detail' session.id %}" class="action-link"><i class="fas fa-eye"></i> Voir</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="5" style="text-align: center; padding: 2rem;">Vous n'avez encore rempli aucun journal de bord.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

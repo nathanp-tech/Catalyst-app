@@ -1,0 +1,261 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Ma Progression{% endblock %}
+
+{% block head_extra %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .progression-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            text-align: center;
+        }
+        .stat-card .icon {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+        .stat-card .value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--header-color);
+        }
+        .stat-card .label {
+            font-size: 1rem;
+            color: var(--text-muted);
+        }
+        .chart-container {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            position: relative; /* Nécessaire pour le bon fonctionnement de Chart.js */
+            height: 400px; /* Définit une hauteur fixe pour le conteneur du graphique */
+        }
+        .badge-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+        .badge {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            width: 120px;
+        }
+        .badge .icon-wrapper {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background-color: var(--primary-light);
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            border: 3px solid var(--primary-color);
+        }
+        .badge .name {
+            font-weight: 600;
+        }
+        .badge .desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1><i class="fas fa-chart-line"></i> Ma Progression</h1>
+    <p>Suis tes progrès, débloque des badges et deviens un expert !</p>
+</div>
+
+<!-- Grille des statistiques clés -->
+<div class="progression-grid">
+    <div class="stat-card">
+        <div class="icon"><i class="fas fa-layer-group"></i></div>
+        <div class="value">{{ total_sessions }}</div>
+        <div class="label">Sessions terminées</div>
+    </div>
+    <div class="stat-card">
+        <div class="icon"><i class="fas fa-stopwatch"></i></div>
+        <div class="value">{{ total_duration_minutes }}</div>
+        <div class="label">Minutes d'apprentissage</div>
+    </div>
+    <div class="stat-card">
+        <div class="icon"><i class="fas fa-star"></i></div>
+        <div class="value">{{ points }}</div>
+        <div class="label">Points d'expérience</div>
+    </div>
+</div>
+
+<!-- Section des graphiques -->
+<div class="progression-grid" style="margin-top: 2rem;">
+    <div class="chart-container">
+        <h3><i class="fas fa-chart-pie"></i> Répartition de mes erreurs</h3>
+        <canvas id="errorPieChart"></canvas>
+    </div>
+    <div class="chart-container">
+        <h3><i class="fas fa-chart-line"></i> Évolution de mes erreurs</h3>
+        <canvas id="errorLineChart"></canvas>
+    </div>
+</div>
+
+<!-- Section des badges -->
+<div class="dashboard-section" style="margin-top: 2rem;">
+    <h2 class="section-title"><i class="fas fa-trophy"></i> Mes Badges</h2>
+    <div class="badge-grid">
+        {% for badge in badges %}
+        <div class="badge" title="{{ badge.desc }}">
+            <div class="icon-wrapper"><i class="fas {{ badge.icon }}"></i></div>
+            <div class="name">{{ badge.name }}</div>
+        </div>
+        {% empty %}
+        <p>Continue à t'entraîner pour débloquer ton premier badge !</p>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Graphique Circulaire (Pie Chart) ---
+    const pieCtx = document.getElementById('errorPieChart').getContext('2d');
+    const overallErrorData = JSON.parse('{{ overall_error_counts_json|safe }}');
+    new Chart(pieCtx, {
+        type: 'pie',
+        data: {
+            labels: ['Calcul', 'Substitution', 'Procédure', 'Conceptuelle'],
+            datasets: [{
+                label: 'Nombre d\'erreurs',
+                data: [
+                    overallErrorData.calcul || 0,
+                    overallErrorData.substitution || 0,
+                    overallErrorData.procedure || 0,
+                    overallErrorData.conceptuelle || 0
+                ],
+                backgroundColor: ['#3498db', '#f1c40f', '#e74c3c', '#9b59b6']
+            }]
+        }
+    });
+
+    // --- Graphique en Lignes (Line Chart) ---
+    const lineCtx = document.getElementById('errorLineChart').getContext('2d');
+    const evolutionData = JSON.parse('{{ error_evolution_json|safe }}');
+
+    // Fonction pour créer des dégradés
+    const createGradient = (ctx, color) => {
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, `${color}4D`); // 30% opacity
+        gradient.addColorStop(1, `${color}00`); // 0% opacity
+        return gradient;
+    };
+
+    new Chart(lineCtx, {
+        type: 'line',
+        data: {
+            labels: evolutionData.labels,
+            datasets: [
+                {
+                    fill: true,
+                    label: 'Erreurs de Calcul',
+                    data: evolutionData.datasets.calcul,
+                    borderColor: '#3498db',
+                    backgroundColor: createGradient(lineCtx.canvas.getContext('2d'), '#3498db'),
+                    tension: 0.4,
+                    pointBackgroundColor: '#3498db',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: '#3498db'
+                },
+                {
+                    fill: true,
+                    label: 'Erreurs de Substitution',
+                    data: evolutionData.datasets.substitution,
+                    borderColor: '#f1c40f',
+                    backgroundColor: createGradient(lineCtx.canvas.getContext('2d'), '#f1c40f'),
+                    tension: 0.4,
+                    pointBackgroundColor: '#f1c40f',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: '#f1c40f'
+                },
+                {
+                    fill: true,
+                    label: 'Erreurs de Procédure',
+                    data: evolutionData.datasets.procedure,
+                    borderColor: '#e74c3c',
+                    backgroundColor: createGradient(lineCtx.canvas.getContext('2d'), '#e74c3c'),
+                    tension: 0.4,
+                    pointBackgroundColor: '#e74c3c',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: '#e74c3c'
+                },
+                {
+                    fill: true,
+                    label: 'Erreurs Conceptuelles',
+                    data: evolutionData.datasets.conceptuelle,
+                    borderColor: '#9b59b6',
+                    backgroundColor: createGradient(lineCtx.canvas.getContext('2d'), '#9b59b6'),
+                    tension: 0.4,
+                    pointBackgroundColor: '#9b59b6',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: '#9b59b6'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        title: (tooltipItems) => 'Semaine du ' + tooltipItems[0].label,
+                        label: (context) => `${context.dataset.label}: ${context.parsed.y} erreur(s)`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Nombre d\'erreurs' },
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                    ticks: {
+                        stepSize: 1 // Assure que l'axe Y n'affiche que des entiers
+                    }
+                },
+                x: {
+                    title: { display: true, text: 'Semaine' },
+                    grid: { display: false }
+                }
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            }
+        }
+    });
+});
+</script>
+
+{% endblock %}
