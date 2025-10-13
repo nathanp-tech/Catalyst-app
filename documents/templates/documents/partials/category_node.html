@@ -1,0 +1,39 @@
+<li>
+    <div class="category-item">
+        <i class="fas fa-chevron-down icon"></i>
+        <i class="fas fa-folder"></i>
+        <span>{{ node.name }}</span>
+    </div>
+    <ul>
+        {% for child in node.children.all %}
+            {% include "documents/partials/category_node.html" with node=child %}
+        {% endfor %}
+
+        {% for doc in node.documents.all %}
+            {% if not doc.solution_for %} {# Affiche uniquement les exercices, pas les corrigés directement #}
+            <li>
+                <div class="document-item">
+                    <div class="document-info">
+                        <i class="fas status-icon {% if doc.file %}fa-check-circle status-ok{% else %}fa-upload status-missing{% endif %}"></i>
+                        <i class="far fa-file-alt doc-type-icon"></i>
+                        <span>{{ doc.title }}</span>
+                    </div>
+                    <a href="{% if doc.file %}{{ doc.file.url }}{% else %}{% url 'documents:update-file' doc.pk %}{% endif %}" class="upload-btn {% if doc.file %}view-btn{% endif %}" {% if doc.file %}target="_blank"{% endif %}>
+                        {% if doc.file %}Voir{% else %}Uploader{% endif %}
+                    </a>
+                </div>
+                {% if doc.solution %}
+                <div class="document-item solution-item">
+                    <div class="document-info">
+                        <i class="fas status-icon {% if doc.solution.file %}fa-check-circle status-ok{% else %}fa-upload status-missing{% endif %}"></i>
+                        <i class="fas fa-file-signature doc-type-icon"></i>
+                        <span>{{ doc.solution.title }}</span>
+                    </div>
+                    <a href="{% if doc.solution.file %}{{ doc.solution.file.url }}{% else %}{% url 'documents:update-file' doc.solution.pk %}{% endif %}" class="upload-btn {% if doc.solution.file %}view-btn{% endif %}" {% if doc.solution.file %}target="_blank"{% endif %}>{% if doc.solution.file %}Voir{% else %}Uploader{% endif %}</a>
+                </div>
+                {% endif %}
+            </li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+</li>

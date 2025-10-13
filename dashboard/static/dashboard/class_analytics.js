@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const fetchData = async () => {
-        const classId = document.getElementById('group-select').value;
+        const classId = document.getElementById('class_id').value;
         if (!classId) {
             alert("Veuillez d'abord sélectionner une classe.");
             return;

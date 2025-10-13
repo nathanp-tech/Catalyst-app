@@ -6,11 +6,12 @@ import json
 from django.core.serializers.json import DjangoJSONEncoder
 from openai import OpenAI
 from django.urls import reverse, reverse_lazy
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, View
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect
 from django.shortcuts import get_object_or_404
@@ -18,6 +19,8 @@ from django.utils.timezone import now
 from .models import ChatSession, ChatMessage
 from documents.models import Document
 from dashboard.services import generate_and_save_session_summary
+from documents.models import Category
+from django.db.models.functions import Cast
 
 class TutorPageView(TemplateView):
     """
@@ -71,8 +74,15 @@ class TutorPageView(TemplateView):
             except ChatSession.DoesNotExist:
                 self.request.session.pop('chat_session_id', None)
                 context['documents'] = Document.objects.all().order_by('title')
+                # Charger les catégories pour l'arborescence si aucune session n'est en cours
+                context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(
+                    'children__children__documents'
+                ).order_by('order', 'name')
         else:
-            context['documents'] = Document.objects.all().order_by('title')
+            # Charger les catégories pour l'arborescence si aucune session n'est en cours
+            context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(
+                'children__children__documents'
+            ).order_by('order', 'name')
         return context
 
 class OpenAIAPIView(APIView):
@@ -83,6 +93,57 @@ class OpenAIAPIView(APIView):
         super().__init__(**kwargs)
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+class StartSessionView(LoginRequiredMixin, View):
+    """
+    Crée une nouvelle session de chat pour un document donné et redirige vers la page du tuteur.
+    """
+    def get(self, request, document_id):
+        document = get_object_or_404(Document, pk=document_id)
+        solution_doc = Document.objects.filter(solution_for=document).first()
+
+        # Préparer le contexte pour l'IA
+        question_context = f"Exercice: {document.title}"
+        solution_context = "Aucun corrigé fourni."
+        if solution_doc and solution_doc.file:
+            # Idéalement, ici on extrairait le texte du PDF du corrigé.
+            # Pour l'instant, on se contente d'une information basique.
+            solution_context = f"Le corrigé de l'exercice '{solution_doc.title}' est disponible."
+
+        # Créer une nouvelle session
+        chat_session = ChatSession.objects.create(
+            student=request.user,
+            document=document,
+            question_context=question_context,
+            solution_context=solution_context
+        )
+        
+        # Générer le message de bienvenue de l'IA
+        try:
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            welcome_prompt = {
+                "role": "system",
+                "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit être un message d'accueil court et motivant pour l'inviter à commencer. Tu tutoies l'élève. Ne mentionne ni la question ni la solution. Réponds uniquement en français."
+            }
+            welcome_response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[welcome_prompt, {"role": "user", "content": "Commence la conversation."}],
+                temperature=0.5
+            )
+            assistant_welcome_text = welcome_response.choices[0].message.content
+            assistant_welcome_structured = [{"type": "text", "text": assistant_welcome_text}]
+            
+            # Sauvegarder le premier message dans la base de données
+            ChatMessage.objects.create(session=chat_session, role='assistant', content=assistant_welcome_structured)
+        except Exception as e:
+            print(f"Erreur lors de la génération du message de bienvenue : {e}")
+
+        # Stocker l'ID de la session et le contexte dans la session de l'utilisateur
+        request.session['chat_session_id'] = chat_session.id
+        request.session['exercise_context'] = {
+            'question': chat_session.question_context,
+            'solution': chat_session.solution_context
+        }
+        return redirect('tutor-page')
 
 class TutorImageAnalysisView(OpenAIAPIView):
     """
@@ -194,9 +255,9 @@ class TutorInteractionView(BaseTutorAPIView):
 
         Tes règles d'or sont :
         1.  **Ne jamais donner la réponse directe** ou la prochaine étape.
-        2.  **Analyser la réponse de l'élève** (image et/ou texte) et identifier les erreurs ou les bonnes idées.
-        4.  **Donner des indices subtils** si l'élève est bloqué.
-        5.  **Féliciter et encourager** l'élève pour ses efforts et ses réussites.
+        2.  **Analyser la réponse de l'élève** (image et/ou texte) pour identifier les erreurs ou les bonnes idées.
+        3.  **Si la réponse est incorrecte ou hors-sujet, corrige gentiment mais directement.** Ne te contente pas de demander "en quoi cela aide ?". Compare ce que l'élève a fait avec ce que l'énoncé demande. Par exemple, si l'élève dessine un polygone irrégulier pour un exercice sur les polygones réguliers, dis : "C'est un bon début de dessiner un polygone ! L'énoncé nous demande un polygone *régulier*. Te souviens-tu de ce qui le rend 'régulier' ?". Sois un guide actif, pas seulement un questionneur passif.
+        4.  **Donner des indices subtils** si l'élève est bloqué, en posant des questions ouvertes.
         6.  **Utiliser le tutoiement** et un ton amical.
         7.  Garder tes réponses concises et focalisées sur une seule idée à la fois.
         8.  Si l'élève semble avoir compris, demande-lui d'expliquer avec ses propres mots pour valider sa compréhension.

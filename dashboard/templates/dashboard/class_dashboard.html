@@ -21,6 +21,85 @@
             --primary-light: #eef5ff;
         }
 
+        .filter-container {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 2rem;
+            align-items: flex-start;
+        }
+        .class-selector-card, .exercise-browser-card {
+            background-color: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            flex: 1;
+        }
+        .exercise-browser-card h3 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .category-tree, .category-tree ul {
+            list-style: none;
+            padding-left: 15px;
+        }
+        .category-tree li { margin-bottom: 0.25rem; }
+        .category-item {
+            font-weight: 600;
+            cursor: pointer;
+            padding: 4px;
+        }
+        .category-item .icon {
+            transition: transform 0.2s ease-in-out;
+            font-size: 0.8em;
+        }
+        .category-item.collapsed .icon { transform: rotate(-90deg); }
+        .document-link {
+            display: block;
+            text-decoration: none;
+            color: var(--text-color);
+            padding: 6px 8px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .document-link:hover { background-color: #e9f5ff; }
+        .document-link.selected {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+        .document-link .fa-file-alt { margin-right: 5px; }
+
+
+        .selected-exercise-display {
+            background-color: var(--primary-light);
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 500;
+        }
+        .selected-exercise-display .clear-filter {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-size: 1.5rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .action-buttons {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 1rem;
+        }
+
         @keyframes card-entry {
             from {
                 opacity: 0;
@@ -30,49 +109,6 @@
                 opacity: 1;
                 transform: translateY(0);
             }
-        }
-
-        .filters-container {
-            background-color: var(--card-bg);
-            padding: 1.5rem;
-            border-radius: 12px;
-            box-shadow: var(--card-shadow);
-            margin-bottom: 2rem;
-        }
-
-        .filter-form {
-            display: flex;
-            gap: 2rem;
-            align-items: center;
-        }
-
-        .filter-group {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            flex-grow: 1;
-        }
-
-        .filter-group label {
-            font-weight: 600;
-            color: var(--header-color);
-        }
-
-        .filter-group select {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            background-color: #f8f9fa;
-            font-family: 'Poppins', sans-serif;
-            font-size: 1rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-
-        .filter-group select:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
         }
 
         .student-grid {
@@ -370,37 +406,44 @@
     <p>Suivez la progression de vos élèves en sélectionnant une classe et un exercice.</p>
 </div>
 
-<div class="filters-container">
-    <form method="get" class="filter-form">
-        <div class="filter-group">
-            <label for="group-select"><i class="fas fa-users"></i> Classe :</label>
-            <select name="group" id="group-select" onchange="this.form.submit()">
-                <option value="">Sélectionnez une classe</option>
-                {% for class in all_classes %}
-                    <option value="{{ class.id }}" {% if selected_group_id == class.id|stringformat:"s" %}selected{% endif %}>{{ class.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="filter-group">
-            <label for="document-select"><i class="fas fa-book-open"></i> Exercice :</label>
-            <select name="document" id="document-select" onchange="this.form.submit()">
-                <option value="">Tous les exercices</option>
-                {% for doc in all_documents %}
-                    <option value="{{ doc.id }}" {% if selected_document_id == doc.id|stringformat:"s" %}selected{% endif %}>{{ doc.title }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="filter-group" style="flex-grow: 0;">
-            <button type="button" id="openGroupCreatorBtn" class="validate-btn secondary" {% if not selected_group %}disabled{% endif %}>
-                <i class="fas fa-users"></i> Créer des groupes
-            </button>
-        </div>
-        <div class="filter-group" style="flex-grow: 0;">
-            <button type="button" id="openAnalyticsBtn" class="validate-btn" {% if not selected_group %}disabled{% endif %}>
-                <i class="fas fa-chart-bar"></i> Analyser la classe
-            </button>
-        </div>
-    </form>
+<div class="filter-container">
+    <div class="class-selector-card">
+        <h3>Sélectionner une classe</h3>
+        <form method="get" id="filterForm">
+            <div class="form-group">
+                <select name="class_id" id="class_id" onchange="this.form.submit()" class="form-control">
+                    <option value="">-- Toutes les classes --</option>
+                    {% for class in classes %}
+                        <option value="{{ class.id }}" {% if class.id|stringformat:"s" == request.GET.class_id %}selected{% endif %}>{{ class.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <input type="hidden" name="exercise_id" id="exercise_id_hidden" value="{{ request.GET.exercise_id }}">
+
+            <div class="action-buttons">
+                <button type="button" id="openAnalyticsBtn" class="validate-btn" {% if not selected_group %}disabled{% endif %}>
+                    <i class="fas fa-chart-bar"></i> Analyser la classe
+                </button>
+                <button type="button" id="openGroupCreatorBtn" class="validate-btn secondary" {% if not selected_group %}disabled{% endif %}>
+                    <i class="fas fa-users"></i> Créer des groupes
+                </button>
+            </div>
+        </form>
+    </div>
+    <div class="exercise-browser-card">
+        <h3>Sélectionner un exercice</h3>
+        {% if selected_exercise_id and student_performance.0.performance_data.0 %}
+            <div class="selected-exercise-display">
+                <span>{{ student_performance.0.performance_data.0.doc_title }}</span>
+                <a href="javascript:void(0)" onclick="selectExercise('{{ selected_exercise_id }}')" class="clear-filter" title="Effacer le filtre">&times;</a>
+            </div>
+        {% endif %}
+        <ul class="category-tree">
+            {% for category in exercise_categories %}
+                {% include "dashboard/partials/exercise_category_node.html" with node=category %}
+            {% endfor %}
+        </ul>
+    </div>
 </div>
 
 {% if selected_group %}
@@ -555,6 +598,40 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Gérer le clic sur les catégories pour les déplier/replier
+    document.querySelectorAll('.category-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.stopPropagation();
+            this.classList.toggle('collapsed');
+            const sublist = this.nextElementSibling;
+            if (sublist && sublist.tagName === 'UL') {
+                sublist.style.display = sublist.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+        // Cacher les sous-listes par défaut
+        const sublist = item.nextElementSibling;
+        if (sublist && sublist.tagName === 'UL') {
+            item.classList.add('collapsed');
+            sublist.style.display = 'none';
+        }
+    });
+
+    // Gérer la sélection d'un exercice
+    window.selectExercise = function(exerciseId) {
+        const hiddenInput = document.getElementById('exercise_id_hidden');
+        const currentSelection = '{{ request.GET.exercise_id|default:"" }}';
+
+        if (exerciseId.toString() === currentSelection) {
+            hiddenInput.value = ''; // Efface le filtre si on clique sur l'exercice déjà sélectionné
+        } else {
+            hiddenInput.value = exerciseId;
+        }
+        document.getElementById('filterForm').submit();
+    }
+});
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const openBtn = document.getElementById('openGroupCreatorBtn');

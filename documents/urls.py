@@ -1,8 +1,11 @@
 # documents/urls.py
 
 from django.urls import path
-from . import views
+from .views import DocumentBrowseView, DocumentUpdateFileView
+
+app_name = 'documents'
 
 urlpatterns = [
-    path('upload/', views.DocumentUploadView.as_view(), name='document-upload'),
+    path('browse/', DocumentBrowseView.as_view(), name='browse'),
+    path('<int:pk>/upload/', DocumentUpdateFileView.as_view(), name='update-file'),
 ]

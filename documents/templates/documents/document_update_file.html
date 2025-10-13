@@ -1,0 +1,32 @@
+{% extends "core/base.html" %}
+
+{% block title %}Mettre à jour le document{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-container {
+        max-width: 600px;
+        margin: 2rem auto;
+        padding: 2rem;
+        background-color: var(--card-bg);
+        border-radius: 12px;
+        box-shadow: var(--shadow-md);
+    }
+    .form-container h1 { margin-top: 0; }
+    .form-group { margin-bottom: 1.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <h1>Mettre à jour : {{ document.title }}</h1>
+    <p>Catégorie : {{ document.category }}</p>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="form-group">
+            {{ form.as_p }}
+        </div>
+        <button type="submit" class="validate-btn">Enregistrer le fichier</button>
+    </form>
+</div>
+{% endblock %}

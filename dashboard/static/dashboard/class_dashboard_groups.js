@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let chatHistory = [];
 
     const getSelectedClassId = () => {
-        return document.getElementById('group-select').value;
+        return document.getElementById('class_id').value;
     };
 
     // --- FONCTIONS D'AFFICHAGE ---

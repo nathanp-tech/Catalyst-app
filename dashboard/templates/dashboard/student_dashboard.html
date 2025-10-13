@@ -60,13 +60,15 @@
         </div>
         <div class="document-list">
             {% for doc in documents %}
-                <a href="{{ doc.file.url }}" target="_blank" class="document-item">
-                    <div class="document-info">
-                        <span class="document-title"><i class="fas fa-file-pdf"></i> {{ doc.title }}</span>
-                        <small>Ajouté le {{ doc.uploaded_at|date:"d/m/Y" }}</small>
-                    </div>
-                    <i class="fas fa-external-link-alt document-link-icon"></i>
-                </a>
+                {% if doc.file %}
+                    <a href="{{ doc.file.url }}" target="_blank" class="document-item">
+                        <div class="document-info">
+                            <span class="document-title"><i class="fas fa-file-pdf"></i> {{ doc.title }}</span>
+                            <small>Ajouté le {{ doc.uploaded_at|date:"d/m/Y" }}</small>
+                        </div>
+                        <i class="fas fa-external-link-alt document-link-icon"></i>
+                    </a>
+                {% endif %}
             {% empty %}
                 <p class="empty-list">Aucun document disponible pour le moment.</p>
             {% endfor %}

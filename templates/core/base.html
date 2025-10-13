@@ -13,13 +13,15 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
         :root {
-            --primary-color: #4A90E2; /* Un bleu moderne et confiant */
-            --secondary-color: #50E3C2; /* Un turquoise frais pour les accents */
-            --background-color: #F8F9FA; /* Un gris très clair pour le fond */
-            --card-bg: #FFFFFF;
-            --text-color: #343A40;
-            --text-muted: #6C757D;
-            --header-color: #2C3E50;
+            /* Palette Light Mode */
+            --primary-color: #4A90E2;      /* Un bleu moderne et confiant */
+            --secondary-color: #50E3C2;    /* Turquoise pour accents secondaires */
+            --background-color: #F8F9FA;   /* Un gris très clair pour le fond */
+            --card-bg: #FFFFFF;            /* Fond des cartes et éléments surélevés */
+            --border-color: #DEE2E6;       /* Bordures subtiles */
+            --text-color: #343A40;         /* Texte principal (noir doux) */
+            --text-muted: #6C757D;         /* Texte secondaire (gris) */
+            --header-color: #2C3E50;       /* Couleur du texte des titres/en-têtes */
             --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
             --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
         }
@@ -35,7 +37,7 @@
         }
 
         header {
-            background-color: var(--card-bg);
+            background-color: #FFFFFF; /* Fond blanc pour le header */
             box-shadow: var(--shadow-sm);
             padding: 0 2rem;
         }
@@ -88,6 +90,7 @@
         }
 
         .nav-links a:hover::after {
+            color: var(--primary-color);
             width: 100%;
         }
 
@@ -102,7 +105,7 @@
 
         footer {
             background-color: var(--header-color);
-            color: white;
+            color: #FFFFFF;
             text-align: center;
             padding: 1.5rem;
             margin-top: auto;

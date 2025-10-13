@@ -1,10 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
 
     // --- SÉLECTION DES ÉLÉMENTS DU DOM ---
-    const welcomeScreen = document.getElementById('welcomeScreen');
-    const workspace = document.getElementById('workspace');
-    const documentSelector = document.getElementById('documentSelector');
-    const startExerciseBtn = document.getElementById('startExerciseBtn');
     const questionCard = document.getElementById('questionCard');
     const questionImageDisplay = document.getElementById('questionImageDisplay');
     const endExerciseBtn = document.getElementById('endExerciseBtn');
@@ -30,8 +26,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomOutBtn = document.getElementById('zoomOutBtn');
     const zoomResetBtn = document.getElementById('zoomResetBtn');
     const questionZoomPercent = document.getElementById('questionZoomPercent');
-    const documentSelectionDiv = document.getElementById('documentSelection');
-    const loadingIndicator = document.getElementById('loadingIndicator');
     const leftPanel = document.querySelector('.left-panel');
     const whiteboardWorkspace = document.querySelector('.whiteboard-workspace');
     
@@ -87,13 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (sessionData.exercise_document) {
             const documentUrl = sessionData.exercise_document.url;
-            welcomeScreen.classList.add('hidden');
-            workspace.classList.remove('hidden');
             if (documentUrl.toLowerCase().endsWith('.pdf')) {
                 await loadPdfAsImage(documentUrl, 1); // On charge la première page
-            } else {
-                uploadedImage = documentUrl;
-                if (questionImageDisplay) questionImageDisplay.src = uploadedImage;
             }
             if (sendBtn) sendBtn.disabled = false;
 
@@ -107,28 +96,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===            GESTION DE L'EXERCICE (PDF, IMAGE)               ===
     // ===================================================================
 
-    async function startExercise() {
-        const documentUrl = documentSelector.value;
-        if (!documentUrl) return;
-        startExerciseBtn.disabled = true;
-
-        try {
-            if (documentUrl.toLowerCase().endsWith('.pdf')) {
-                await loadPdfAsImage(documentUrl, 1);
-                await analyzeAndSwitchView();
-            } else {
-                uploadedImage = documentUrl;
-                if (questionImageDisplay) questionImageDisplay.src = uploadedImage;
-                updateQuestionZoom(1);
-                await analyzeAndSwitchView();
-            }
-        } catch (error) {
-            console.error("Erreur lors du chargement:", error);
-            alert("Erreur lors du chargement du document.");
-            startExerciseBtn.disabled = documentSelector.value === "";
-        }
-    }
-    
     async function loadPdfAsImage(pdfUrl, pageNum) {
         const loadingTask = pdfjsLib.getDocument(pdfUrl);
         currentPdf = await loadingTask.promise;
@@ -150,46 +117,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             uploadedImage = tempCanvas.toDataURL('image/png');
             if (questionImageDisplay) questionImageDisplay.src = uploadedImage;
-        }
-    }
-
-    async function analyzeAndSwitchView() {
-        await analyzeQuestionImage();
-        welcomeScreen.classList.add('hidden');
-        workspace.classList.remove('hidden');
-        resizeCanvas();
-    }
-
-    async function analyzeQuestionImage() {
-        if (!documentSelector || !uploadedImage) return;
-        
-        // Affiche l'indicateur de chargement et masque la sélection
-        documentSelectionDiv.classList.add('hidden');
-        loadingIndicator.classList.remove('hidden');
-
-        const imageBase64 = uploadedImage.split(',')[1];
-        try {
-            const res = await fetch(window.APP_CONFIG.analyzeImageUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "X-CSRFToken": window.APP_CONFIG.csrfToken },
-                body: JSON.stringify({ image: imageBase64, document_url: documentSelector.value })
-            });
-            if (!res.ok) throw new Error(`Erreur API: ${res.status}`);
-            const data = await res.json();
-            chatHistory = data.initial_history;
-            renderChatHistory();
-            if (sendBtn) sendBtn.disabled = false;
-
-            // Démarrer la sauvegarde automatique
-            if (saveInterval) clearInterval(saveInterval);
-            saveInterval = setInterval(saveWhiteboardState, 15000);
-        } catch (err) {
-            console.error(err);
-            alert("Une erreur est survenue lors de la préparation de l'exercice. Veuillez réessayer.");
-            // En cas d'erreur, on ré-affiche la sélection
-            documentSelectionDiv.classList.remove('hidden');
-        } finally {
-            loadingIndicator.classList.add('hidden');
         }
     }
 
@@ -550,12 +477,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===================================================================
 
     function attachEventListeners() {
-        if (documentSelector) {
-            documentSelector.addEventListener('change', () => {
-                startExerciseBtn.disabled = !documentSelector.value;
-            });
-        }
-        if (startExerciseBtn) startExerciseBtn.addEventListener('click', startExercise);
         if (endExerciseBtn) {
             endExerciseBtn.addEventListener('click', async () => {
                 if (!confirm("Es-tu sûr de vouloir terminer ?")) return;

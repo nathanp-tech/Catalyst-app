@@ -42,3 +42,33 @@ class DocumentForm(forms.ModelForm):
             raise ValidationError(f"La taille du fichier ne doit pas dépasser {int(MAX_FILE_SIZE / 1024 / 1024)}Mo.")
             
         return file
+
+
+class DocumentFileUpdateForm(forms.ModelForm):
+    """
+    Formulaire simplifié pour mettre à jour uniquement le fichier d'un document.
+    """
+    class Meta:
+        model = Document
+        fields = ['file']
+        labels = {
+            'file': 'Fichier (PDF uniquement, 10Mo max)',
+        }
+        widgets = {
+            'file': forms.FileInput(attrs={'class': 'file-input'}),
+        }
+
+    def clean_file(self):
+        file = self.cleaned_data.get('file', False)
+        if not file:
+            raise ValidationError("Aucun fichier sélectionné.")
+        
+        # Valider l'extension
+        if not file.name.endswith('.pdf'):
+            raise ValidationError("Le fichier doit être au format PDF.")
+        
+        # Valider la taille
+        if file.size > MAX_FILE_SIZE:
+            raise ValidationError(f"La taille du fichier ne doit pas dépasser {int(MAX_FILE_SIZE / 1024 / 1024)}Mo.")
+            
+        return file

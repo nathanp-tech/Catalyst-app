@@ -1,0 +1,23 @@
+<li>
+    <div class="category-item">
+        <i class="fas fa-chevron-down icon"></i>
+        <i class="fas fa-folder"></i>
+        <span>{{ node.name }}</span>
+    </div>
+    <ul>
+        {% for child in node.children.all %}
+            {% include "dashboard/partials/exercise_category_node.html" with node=child %}
+        {% endfor %}
+
+        {% for doc in node.documents.all %}
+            {# On affiche uniquement les exercices (pas les corrigés) qui ont un fichier #}
+            {% if not doc.solution_for and doc.file %}
+            <li>
+                <a href="javascript:void(0)" onclick="selectExercise('{{ doc.id }}')" class="document-link {% if doc.id|stringformat:'s' == request.GET.exercise_id %}selected{% endif %}">
+                    <i class="far fa-file-alt"></i> <span>{{ doc.title }}</span>
+                </a>
+            </li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+</li>

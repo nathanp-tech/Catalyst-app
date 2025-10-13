@@ -6,7 +6,7 @@ from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import user_passes_test
 from django.urls import reverse
 from datetime import timedelta
-from documents.models import Document
+from documents.models import Document, Category
 from django.db.models import Q
 from django.contrib.auth.models import Group
 import json
@@ -164,25 +164,25 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # Récupérer tous les groupes qui peuvent être des classes (on exclut les profs)
-        all_classes = Group.objects.exclude(name='Professeurs')
-        context['all_classes'] = all_classes
-        context['all_documents'] = Document.objects.all().order_by('title')
-        
-        selected_group_id = self.request.GET.get('group')
-        selected_document_id = self.request.GET.get('document')
-        context['selected_group_id'] = selected_group_id
-        context['selected_document_id'] = selected_document_id
-
-        
-        selected_group_id = self.request.GET.get('group')
-        students = []
-        
         User = get_user_model()
-        if selected_group_id:
+
+        # 1. Préparer le contexte pour les filtres
+        context['classes'] = Group.objects.exclude(name='Professeurs')
+        context['exercise_categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(
+            'children__children__documents'
+        ).order_by('order', 'name')
+
+        selected_class_id = self.request.GET.get('class_id')
+        selected_exercise_id = self.request.GET.get('exercise_id')
+        context['selected_class_id'] = selected_class_id
+        context['selected_exercise_id'] = selected_exercise_id
+
+        # 2. Récupérer les élèves si une classe est sélectionnée
+        students = []
+        selected_group = None
+        if selected_class_id:
             try:
-                selected_group = Group.objects.get(id=selected_group_id)
+                selected_group = Group.objects.get(id=selected_class_id)
                 context['selected_group'] = selected_group
                 students = User.objects.filter(groups=selected_group).prefetch_related(
                     'chatsession_set__document', 
@@ -190,16 +190,16 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
                 )
             except Group.DoesNotExist:
                 pass # Le groupe n'existe pas, on renvoie une liste d'élèves vide
-        
-        # Agréger les données de performance pour les élèves trouvés
+
+        # 3. Agréger les données de performance pour les élèves trouvés
         student_performance = []
         for student in students:
             performance_details = []
             sessions_for_student = student.chatsession_set.all()
 
-            if selected_document_id:
+            if selected_exercise_id:
                 # Vue par exercice
-                sessions_for_doc = sessions_for_student.filter(document_id=selected_document_id)
+                sessions_for_doc = sessions_for_student.filter(document_id=selected_exercise_id)
                 if sessions_for_doc.exists():
                     latest_session = sessions_for_doc.latest('start_time')
                     total_duration = sum(((s.end_time - s.start_time).total_seconds() for s in sessions_for_doc if s.end_time), 0)
@@ -662,13 +662,10 @@ class ClassAnalyticsAPIView(LoginRequiredMixin, View):
         except Group.DoesNotExist:
             return JsonResponse({'error': 'Classe non trouvée.'}, status=404)
 
-        # Utiliser l'annotation pour des performances optimales
-        students_with_stats = get_user_model().objects.filter(groups=teacher_class).annotate(
-            total_sessions=Count('chatsession'),
-            total_messages=Count('chatsession__messages'),
-            # Note: L'agrégation de la durée et des erreurs JSON reste plus complexe
-            # et peut nécessiter une boucle, mais les comptes simples sont optimisés.
-        )
+        # Pré-charger toutes les sessions et messages des élèves de la classe en 2 requêtes
+        students = get_user_model().objects.filter(
+            groups=teacher_class
+        ).prefetch_related('chatsession_set__messages')
 
         analytics_data = []
         error_key_map = {
@@ -676,7 +673,7 @@ class ClassAnalyticsAPIView(LoginRequiredMixin, View):
             "Erreurs de procédure": "procedure", "Erreurs conceptuelles": "conceptuelle",
         }
 
-        for student in students_with_stats:
+        for student in students:
             sessions = student.chatsession_set.all()
             total_duration = sum(((s.end_time - s.start_time).total_seconds() for s in sessions if s.end_time), 0)
 
@@ -690,9 +687,9 @@ class ClassAnalyticsAPIView(LoginRequiredMixin, View):
 
             analytics_data.append({
                 'student_name': student.username,
-                'total_sessions': student.total_sessions, # Donnée annotée
+                'total_sessions': len(sessions),
                 'total_duration_minutes': int(total_duration / 60),
-                'total_messages': student.total_messages, # Donnée annotée
+                'total_messages': sum(s.messages.count() for s in sessions),
                 'total_errors': sum(error_counts.values()),
                 'error_distribution': dict(error_counts)
             })

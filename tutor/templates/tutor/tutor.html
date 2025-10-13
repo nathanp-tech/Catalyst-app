@@ -1,11 +1,9 @@
 {% extends "core/base.html" %}
 {% load static %}
 
-{% block title %}Tuteur IA - Catalyst{% endblock %}
+{% block title %}Tuteur IA{% endblock %}
 
 {% block head_extra %}
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <style>
         /* Styles pour la carte de question en mode plein écran */
         .whiteboard-workspace:fullscreen .question-card.in-fullscreen {
@@ -32,125 +30,193 @@
         .question-card.in-fullscreen:not(:fullscreen) {
             display: none;
         }
+
+        /* Styles pour l'arborescence des documents */
+        .document-browser {
+            background-color: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            max-width: 800px;
+            margin: 2rem auto;
+        }
+        .category-tree, .category-tree ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+        .category-tree li {
+            margin-bottom: 0.5rem;
+        }
+        .category-item, .document-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            border-radius: 6px;
+        }
+        .category-item {
+            font-weight: 600;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+        .category-item .icon {
+            transition: transform 0.2s ease-in-out;
+        }
+        .category-item.collapsed .icon {
+            transform: rotate(-90deg);
+        }
+        .document-link {
+            justify-content: space-between;
+            background-color: var(--background-color);
+            border: 1px solid var(--border-color);
+            text-decoration: none;
+            color: var(--text-color);
+            transition: background-color 0.2s, transform 0.2s;
+        }
+        .document-link:hover {
+            background-color: #e9f5ff;
+            transform: translateX(5px);
+        }
+        .document-link .doc-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .document-link .fa-file-alt { color: var(--primary-color); }
+        .document-link .start-arrow { color: var(--secondary-color); }
     </style>
     
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
     <link rel="stylesheet" href="{% static 'tutor/tutor.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="tutor-container">
-  
-    <div id="welcomeScreen" {% if ongoing_session %}class="hidden"{% endif %}>
-        <div class="welcome-box">
-            <h1>🧮 Tuteur en Mathématiques</h1>
-            <p>Pour commencer, choisis un document d'exercices.</p>
-            <div id="documentSelection" class="file-upload">
-                <select id="documentSelector" class="file-label">
-                    <option value="">-- Choisir un document --</option>
-                    {% for doc in documents %}
-                        <option value="{{ doc.file.url }}">{{ doc.title }}</option>
-                    {% endfor %}
-                </select>
-                <button id="startExerciseBtn" class="validate-btn" disabled>
-                    <i class="fas fa-play"></i> Commencer
-                </button>
-            </div>
-            <div id="loadingIndicator" class="hidden">
-                <div class="spinner"></div>
-                <p>Préparation de votre session avec l'IA...</p>
-            </div>
-        </div>
-    </div>
-
-    <main id="workspace" {% if not ongoing_session %}class="hidden"{% endif %}>
-        
-        <div class="left-panel">
-            <div id="questionCard" class="question-card">
-                <div class="card-header">
-                    <strong>Question :</strong>
-                    <div class="question-zoom-controls">
-                        <button id="zoomOutBtn" title="Zoom arrière"><i class="fas fa-search-minus"></i></button>
-                        <span id="questionZoomPercent">100%</span>
-                        <button id="zoomInBtn" title="Zoom avant"><i class="fas fa-search-plus"></i></button>
-                        <button id="zoomResetBtn" title="Réinitialiser le zoom"><i class="fas fa-expand"></i></button>
+{% if ongoing_session %}
+    <div id="tutor-interface" class="tutor-container">
+        <main id="workspace">
+            <div class="left-panel">
+                <div id="questionCard" class="question-card">
+                    <div class="card-header">
+                        <strong>Question :</strong>
+                        <div class="question-zoom-controls">
+                            <button id="zoomOutBtn" title="Zoom arrière"><i class="fas fa-search-minus"></i></button>
+                            <span id="questionZoomPercent">100%</span>
+                            <button id="zoomInBtn" title="Zoom avant"><i class="fas fa-search-plus"></i></button>
+                            <button id="zoomResetBtn" title="Réinitialiser le zoom"><i class="fas fa-expand"></i></button>
+                        </div>
+                        <button id="endExerciseBtn" class="end-exercise-btn" title="Terminer l'exercice">
+                            <i class="fas fa-flag-checkered"></i>
+                            <span>Terminer</span>
+                        </button>
                     </div>
-                    <button id="endExerciseBtn" class="end-exercise-btn" title="Terminer l'exercice">
-                        <i class="fas fa-flag-checkered"></i>
-                        <span>Terminer</span>
-                    </button>
-                </div>
-                <div id="questionImageContainer">
-                    <img id="questionImageDisplay" src="" alt="Question de mathématiques">
-                </div>
-            </div>
-            
-            <div class="chat-container">
-                <div id="chatbox"></div>
-            </div>
-        </div>
-
-        <div class="right-panel">
-            <div class="whiteboard-workspace">
-                <div class="toolbar">
-                    <div class="tool-group">
-                        <button id="penTool" class="tool active" title="Stylo"><i class="fas fa-pen"></i></button>
-                        <button id="eraserTool" class="tool" title="Gomme"><i class="fas fa-eraser"></i></button>
+                    <div id="questionImageContainer">
+                        <img id="questionImageDisplay" src="" alt="Question de mathématiques">
                     </div>
-                    <div class="tool-divider"></div>
-                    <div class="tool-group">
-                        <button id="lineTool" class="tool" title="Ligne"><i class="fas fa-minus"></i></button>
-                        <button id="rectTool" class="tool" title="Rectangle"><i class="far fa-square"></i></button>
-                        <button id="circleTool" class="tool" title="Cercle"><i class="far fa-circle"></i></button>
-                        <button id="textTool" class="tool" title="Texte"><i class="fas fa-font"></i></button>
-                        <button id="selectTool" class="tool" title="Sélectionner"><i class="fas fa-mouse-pointer"></i></button>
-                    </div>
-                    <div class="tool-divider"></div>
-                    <div class="tool-group">
-                        <input type="color" id="colorPicker" value="#000000" title="Couleur">
-                    </div>
-                    <div class="tool-divider"></div>
-                    <div class="tool-group thickness-group">
-                        <i id="thickness-icon" class="fas fa-pen-nib"></i>
-                        <input type="range" id="sizeSlider" min="1" max="50" value="5" title="Épaisseur">
-                    </div>
-                    <div class="tool-divider"></div>
-                    <button id="clearCanvasBtn" class="tool clear-btn" title="Effacer tout"><i class="fas fa-trash-alt"></i></button>
-                    <div class="tool-divider"></div>
-                    <div class="tool-group">
-                        <button id="undoBtn" class="tool" title="Annuler"><i class="fas fa-undo"></i></button>
-                        <button id="redoBtn" class="tool" title="Rétablir"><i class="fas fa-redo"></i></button>
-                    </div>
-                    <div class="tool-divider"></div>
-                    <button id="fullscreenBtn" class="tool" title="Plein écran"><i class="fas fa-expand"></i></button>
                 </div>
                 
-                <div id="canvas-container">
-                    <canvas id="whiteboard"></canvas>
+                <div class="chat-container">
+                    <div id="chatbox"></div>
                 </div>
             </div>
-
-            <div class="input-area">
-                <textarea id="textInput" placeholder="Écris ta réponse ou pose une question..."></textarea>
-                <button id="sendBtn" disabled>
-                    <span id="sendBtnText">Envoyer</span>
-                    <i class="fas fa-paper-plane"></i>
-                </button>
+    
+            <div class="right-panel">
+                <div class="whiteboard-workspace">
+                    <div class="toolbar">
+                        <div class="tool-group">
+                            <button id="penTool" class="tool active" title="Stylo"><i class="fas fa-pen"></i></button>
+                            <button id="eraserTool" class="tool" title="Gomme"><i class="fas fa-eraser"></i></button>
+                        </div>
+                        <div class="tool-divider"></div>
+                        <div class="tool-group">
+                            <button id="lineTool" class="tool" title="Ligne"><i class="fas fa-minus"></i></button>
+                            <button id="rectTool" class="tool" title="Rectangle"><i class="far fa-square"></i></button>
+                            <button id="circleTool" class="tool" title="Cercle"><i class="far fa-circle"></i></button>
+                            <button id="textTool" class="tool" title="Texte"><i class="fas fa-font"></i></button>
+                            <button id="selectTool" class="tool" title="Sélectionner"><i class="fas fa-mouse-pointer"></i></button>
+                        </div>
+                        <div class="tool-divider"></div>
+                        <div class="tool-group">
+                            <input type="color" id="colorPicker" value="#000000" title="Couleur">
+                        </div>
+                        <div class="tool-divider"></div>
+                        <div class="tool-group thickness-group">
+                            <i id="thickness-icon" class="fas fa-pen-nib"></i>
+                            <input type="range" id="sizeSlider" min="1" max="50" value="5" title="Épaisseur">
+                        </div>
+                        <div class="tool-divider"></div>
+                        <button id="clearCanvasBtn" class="tool clear-btn" title="Effacer tout"><i class="fas fa-trash-alt"></i></button>
+                        <div class="tool-divider"></div>
+                        <div class="tool-group">
+                            <button id="undoBtn" class="tool" title="Annuler"><i class="fas fa-undo"></i></button>
+                            <button id="redoBtn" class="tool" title="Rétablir"><i class="fas fa-redo"></i></button>
+                        </div>
+                        <div class="tool-divider"></div>
+                        <button id="fullscreenBtn" class="tool" title="Plein écran"><i class="fas fa-expand"></i></button>
+                    </div>
+                    
+                    <div id="canvas-container">
+                        <canvas id="whiteboard"></canvas>
+                    </div>
+                </div>
+    
+                <div class="input-area">
+                    <textarea id="textInput" placeholder="Écris ta réponse ou pose une question..."></textarea>
+                    <button id="sendBtn" disabled>
+                        <span id="sendBtnText">Envoyer</span>
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
             </div>
+        </main>
+    </div>
+{% else %}
+    <div class="document-browser">
+        <div class="dashboard-header" style="text-align: center; margin-bottom: 2rem;">
+            <h1>Choisissez un exercice</h1>
+            <p>Sélectionnez un exercice dans la liste ci-dessous pour commencer une session avec le tuteur.</p>
         </div>
+        <ul class="category-tree">
+            {% for category in categories %}
+                {% include "tutor/partials/student_category_node.html" with node=category %}
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}
+{% endblock %}
 
-    </main>
-</div>
+{% block scripts %}
+<script>
+    // Script pour rendre l'arborescence interactive
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.category-item').forEach(item => {
+            item.addEventListener('click', function() {
+                this.classList.toggle('collapsed');
+                const sublist = this.nextElementSibling;
+                if (sublist && sublist.tagName === 'UL') {
+                    sublist.style.display = sublist.style.display === 'none' ? 'block' : 'none';
+                }
+            });
 
+            // Fermer tous les niveaux par défaut
+            const sublist = item.nextElementSibling;
+            if (sublist && sublist.tagName === 'UL') {
+                item.classList.add('collapsed');
+                sublist.style.display = 'none';
+            }
+        });
+    });
+</script>
 <script>
     window.APP_CONFIG = {
         analyzeImageUrl: "{% url 'tutor-analyze-image' %}",
-        endSessionUrl: "{% url 'tutor-end-session' %}",
+        endSessionUrl: "{% url 'end-session' %}",
         tutorInteractUrl: "{% url 'tutor-interact' %}",
-        saveWhiteboardUrl: "{% url 'tutor-save-whiteboard' %}",
-        getHintUrl: "{% url 'tutor-get-hint' %}",
+        saveWhiteboardUrl: "{% url 'save-whiteboard' %}",
         csrfToken: "{{ csrf_token }}"
     };
 </script>

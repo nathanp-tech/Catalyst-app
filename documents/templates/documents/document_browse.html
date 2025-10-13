@@ -1,0 +1,103 @@
+{% extends "core/base.html" %}
+
+{% block title %}Parcourir les Documents{% endblock %}
+
+{% block head_extra %}
+<style>
+    .browser-container {
+        background-color: var(--card-bg);
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: var(--shadow-md);
+    }
+    .category-tree, .category-tree ul {
+        list-style: none;
+        padding-left: 20px;
+    }
+    .category-tree li {
+        margin-bottom: 0.5rem;
+    }
+    .category-item, .document-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px;
+        border-radius: 6px;
+    }
+    .category-item {
+        font-weight: 600;
+        font-size: 1.2rem;
+        cursor: pointer;
+    }
+    .category-item .icon {
+        transition: transform 0.2s ease-in-out;
+    }
+    .category-item.collapsed .icon {
+        transform: rotate(-90deg);
+    }
+    .document-item {
+        justify-content: space-between;
+        background-color: #f9f9f9;
+    }
+    .document-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .document-info .fa-file-pdf { color: #e74c3c; }
+    .document-info .fa-check-circle { color: #2ecc71; }
+    .document-info .fa-times-circle { color: #f39c12; }
+    .upload-btn {
+        padding: 5px 10px;
+        font-size: 0.8rem;
+        text-decoration: none;
+        background-color: var(--primary-color);
+        color: white;
+        border-radius: 5px;
+    }
+    .view-btn {
+        background-color: var(--secondary-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Gestion des Documents</h1>
+    <p>Naviguez dans l'arborescence et ajoutez les fichiers PDF manquants.</p>
+</div>
+
+<div class="browser-container">
+    <ul class="category-tree">
+        {% for category in categories %}
+            {% include "documents/partials/category_node.html" with node=category %}
+        {% endfor %}
+    </ul>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.category-item').forEach(item => {
+        item.addEventListener('click', function() {
+            this.classList.toggle('collapsed');
+            const sublist = this.nextElementSibling;
+            if (sublist && sublist.tagName === 'UL') {
+                sublist.style.display = sublist.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+
+        // Initial state: collapse all but top level
+        const sublist = item.nextElementSibling;
+        if (sublist && sublist.tagName === 'UL') {
+            item.classList.add('collapsed');
+            sublist.style.display = 'none';
+        }
+    });
+
+    // Open top-level by default
+    document.querySelectorAll('.category-tree > li > .category-item').forEach(item => {
+        item.click();
+    });
+});
+</script>
+{% endblock %}
