@@ -37,16 +37,26 @@
     }
     .document-item {
         justify-content: space-between;
-        background-color: #f9f9f9;
+        background-color: var(--background-color);
+        border: 1px solid var(--border-color);
+    }
+    .solution-item {
+        margin-left: 20px;
+        background-color: #f0f8ff; /* Un bleu très clair pour le fond du corrigé */
+        border-left: 3px solid var(--primary-color);
     }
     .document-info {
         display: flex;
         align-items: center;
         gap: 8px;
     }
-    .document-info .fa-file-pdf { color: #e74c3c; }
-    .document-info .fa-check-circle { color: #2ecc71; }
-    .document-info .fa-times-circle { color: #f39c12; }
+    .status-icon { width: 20px; text-align: center; }
+    .status-ok { color: #2ecc71; } /* Vert pour "OK" */
+    .status-missing { color: #f39c12; } /* Orange pour "Manquant" */
+    .doc-type-icon {
+        color: var(--text-muted);
+        width: 16px;
+    }
     .upload-btn {
         padding: 5px 10px;
         font-size: 0.8rem;
@@ -55,8 +65,20 @@
         color: white;
         border-radius: 5px;
     }
+    .document-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
     .view-btn {
         background-color: var(--secondary-color);
+    }
+    .replace-btn {
+        background-color: #e74c3c; /* Rouge pour la suppression/remplacement */
+        border: none;
+        cursor: pointer;
+        padding: 5px; /* Padding ajusté pour une icône */
+        width: 30px; /* Largeur fixe pour un bouton carré */
+        height: 30px;
     }
 </style>
 {% endblock %}

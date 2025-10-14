@@ -1,10 +1,11 @@
 # documents/views.py
 
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, View
 from django.views.generic.edit import CreateView, UpdateView
 from django.contrib.auth.mixins import UserPassesTestMixin, LoginRequiredMixin
 from django.contrib.auth.decorators import user_passes_test
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
+from django.shortcuts import get_object_or_404, redirect
 from django.db import models
 from django.db.models.functions import Cast
 from django.utils.decorators import method_decorator
@@ -32,6 +33,22 @@ class DocumentUploadView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     def form_valid(self, form):
         form.instance.uploaded_by = self.request.user
         return super().form_valid(form)
+
+@method_decorator(user_passes_test(is_teacher), name='dispatch')
+class DocumentClearFileView(LoginRequiredMixin, View):
+    """
+    Supprime le fichier associé à un document pour permettre un nouvel upload.
+    """
+    def post(self, request, pk):
+        doc = get_object_or_404(Document, pk=pk)
+        
+        # Supprimer le fichier physique du stockage
+        if doc.file:
+            doc.file.delete(save=False) # Ne pas sauvegarder le modèle tout de suite
+
+        doc.file = None
+        doc.save()
+        return redirect('documents:browse')
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class DocumentBrowseView(LoginRequiredMixin, TemplateView):

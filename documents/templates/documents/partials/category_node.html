@@ -9,7 +9,7 @@
             {% include "documents/partials/category_node.html" with node=child %}
         {% endfor %}
 
-        {% for doc in node.documents.all %}
+        {% for doc in node.sorted_documents|default:node.documents.all %}
             {% if not doc.solution_for %} {# Affiche uniquement les exercices, pas les corrigés directement #}
             <li>
                 <div class="document-item">
@@ -18,9 +18,17 @@
                         <i class="far fa-file-alt doc-type-icon"></i>
                         <span>{{ doc.title }}</span>
                     </div>
-                    <a href="{% if doc.file %}{{ doc.file.url }}{% else %}{% url 'documents:update-file' doc.pk %}{% endif %}" class="upload-btn {% if doc.file %}view-btn{% endif %}" {% if doc.file %}target="_blank"{% endif %}>
-                        {% if doc.file %}Voir{% else %}Uploader{% endif %}
-                    </a>
+                    <div class="document-actions">
+                        {% if doc.file %}
+                            <a href="{{ doc.file.url }}" target="_blank" class="upload-btn view-btn">Voir</a>
+                            <form action="{% url 'documents:clear-file' doc.pk %}" method="post" style="display: inline;" onsubmit="return confirm('Voulez-vous vraiment remplacer ce fichier ?');">
+                                {% csrf_token %}
+                                <button type="submit" class="upload-btn replace-btn" title="Supprimer le fichier"><i class="fas fa-trash-alt"></i></button>
+                            </form>
+                        {% else %}
+                            <a href="{% url 'documents:update-file' doc.pk %}" class="upload-btn">Uploader</a>
+                        {% endif %}
+                    </div>
                 </div>
                 {% if doc.solution %}
                 <div class="document-item solution-item">
@@ -29,7 +37,17 @@
                         <i class="fas fa-file-signature doc-type-icon"></i>
                         <span>{{ doc.solution.title }}</span>
                     </div>
-                    <a href="{% if doc.solution.file %}{{ doc.solution.file.url }}{% else %}{% url 'documents:update-file' doc.solution.pk %}{% endif %}" class="upload-btn {% if doc.solution.file %}view-btn{% endif %}" {% if doc.solution.file %}target="_blank"{% endif %}>{% if doc.solution.file %}Voir{% else %}Uploader{% endif %}</a>
+                    <div class="document-actions">
+                        {% if doc.solution.file %}
+                            <a href="{{ doc.solution.file.url }}" target="_blank" class="upload-btn view-btn">Voir</a>
+                            <form action="{% url 'documents:clear-file' doc.solution.pk %}" method="post" style="display: inline;" onsubmit="return confirm('Voulez-vous vraiment remplacer ce fichier ?');">
+                                {% csrf_token %}
+                                <button type="submit" class="upload-btn replace-btn" title="Supprimer le fichier"><i class="fas fa-trash-alt"></i></button>
+                            </form>
+                        {% else %}
+                            <a href="{% url 'documents:update-file' doc.solution.pk %}" class="upload-btn">Uploader</a>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endif %}
             </li>

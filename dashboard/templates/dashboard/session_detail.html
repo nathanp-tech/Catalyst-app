@@ -1,10 +1,12 @@
 {% extends "core/base.html" %}
 {% load static %}
+{% load dashboard_extras %}
 
 {% block title %}Détail de la Session{% endblock %}
 
 {% block head_extra %}
     <link rel="stylesheet" href="{% static 'tutor/tutor.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
     <!-- Bibliothèques pour la génération de PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -64,17 +66,7 @@
             <div id="chatbox">
                 {% for message in session.messages.all %}
                     <div class="chat-message {% if message.role == 'assistant' %}tutor{% else %}user{% endif %}">
-                        {% if message.role == 'assistant' %}
-                            {{ message.content|safe }}
-                        {% else %}
-                            {% for item in message.content %}
-                                {% if item.type == 'text' %}
-                                    <div class="comment-text">{{ item.text }}</div>
-                                {% elif item.type == 'image_url' %}
-                                    <img src="{{ item.url }}" alt="Réponse de l'élève sur le tableau blanc">
-                                {% endif %}
-                            {% endfor %}
-                        {% endif %}
+                        {{ message.content|render_chat_message|linebreaksbr }}
                     </div>
                 {% endfor %}
             </div>
