@@ -13,21 +13,21 @@ from .models import Document, Category
 from .forms import DocumentFileUpdateForm, DocumentForm
 
 def is_teacher(user):
-    """Vérifie si l'utilisateur est dans le groupe 'Professeurs'."""
+    """Checks if the user is in the 'Professeurs' group."""
     return user.groups.filter(name='Professeurs').exists()
 
 class DocumentUploadView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
     """
-    Vue dépréciée, remplacée par DocumentBrowseView et DocumentUpdateFileView.
-    Conservez ou supprimez selon vos besoins.
+    Deprecated view, replaced by DocumentBrowseView and DocumentUpdateFileView.
+    Keep or delete as needed.
     """
     model = Document
     form_class = DocumentForm
     template_name = 'documents/document_upload.html'
-    success_url = reverse_lazy('dashboard:dashboard')  # Redirige vers le tableau de bord après succès
+    success_url = reverse_lazy('dashboard:dashboard')  # Redirects to the dashboard on success
 
     def test_func(self):
-        """Autorise l'accès uniquement aux professeurs."""
+        """Allows access only to teachers."""
         return is_teacher(self.request.user)
     
     def form_valid(self, form):
@@ -37,14 +37,14 @@ class DocumentUploadView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class DocumentClearFileView(LoginRequiredMixin, View):
     """
-    Supprime le fichier associé à un document pour permettre un nouvel upload.
+    Deletes the file associated with a document to allow a new upload.
     """
     def post(self, request, pk):
         doc = get_object_or_404(Document, pk=pk)
         
-        # Supprimer le fichier physique du stockage
+        # Delete the physical file from storage
         if doc.file:
-            doc.file.delete(save=False) # Ne pas sauvegarder le modèle tout de suite
+            doc.file.delete(save=False) # Do not save the model right away
 
         doc.file = None
         doc.save()
@@ -52,13 +52,13 @@ class DocumentClearFileView(LoginRequiredMixin, View):
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class DocumentBrowseView(LoginRequiredMixin, TemplateView):
-    """Affiche l'arborescence des catégories et des documents."""
+    """Displays the category and document tree."""
     template_name = 'documents/document_browse.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # On trie les documents par leur titre en utilisant un tri naturel
-        # en extrayant la partie numérique du titre.
+        # We sort documents by their title using a natural sort
+        # by extracting the numeric part of the title.
         documents_sorted = Document.objects.annotate(
             numeric_part=Cast(models.functions.Substr('title', 3), models.IntegerField())
         ).order_by('numeric_part')
@@ -67,7 +67,7 @@ class DocumentBrowseView(LoginRequiredMixin, TemplateView):
         return context
 
 class DocumentUpdateFileView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
-    """Vue pour uploader ou remplacer le fichier d'un document existant."""
+    """View to upload or replace the file of an existing document."""
     model = Document
     form_class = DocumentFileUpdateForm
     template_name = 'documents/document_update_file.html'

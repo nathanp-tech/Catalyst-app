@@ -17,7 +17,7 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Charger les variables d'environnement depuis le fichier .env
+# Load environment variables from the .env file
 load_dotenv(BASE_DIR / ".env")
 
 
@@ -30,7 +30,7 @@ SECRET_KEY = "django-insecure-1tcszmj%u1&s-#28er1o4n3eb#c&yg-87@*2y^_fy+#40zi7u%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', '192.168.1.66'] # Remplacez <VOTRE_IP_LOCALE> par votre vraie IP
+ALLOWED_HOSTS = ['127.0.0.1', '192.168.1.83'] # Replace <YOUR_LOCAL_IP> with your actual IP
 
 
 # Application definition
@@ -42,10 +42,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # Bibliothèques tierces
+    # Third-party libraries
     "rest_framework",
     "corsheaders",
-    # Applications du projet
+    # Project applications
     "core",
     "dashboard.apps.DashboardConfig",
     "tutor.apps.TutorConfig",
@@ -56,7 +56,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "corsheaders.middleware.CorsMiddleware",  # Important: à placer avant CommonMiddleware
+    "corsheaders.middleware.CorsMiddleware",  # Important: place before CommonMiddleware
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -133,9 +133,8 @@ USE_TZ = True
 STATIC_URL = "static/"
 #STATICFILES_DIRS = [
 #    BASE_DIR / "static",
-    
 #]
-# Dossier où `collectstatic` placera tous les fichiers statiques pour la production
+# Directory where `collectstatic` will place all static files for production
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Default primary key field type
@@ -143,16 +142,16 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Configuration CORS
-# Pour le développement, on autorise tout. En production, on restreindra.
+# CORS configuration
+# For development, allow everything. In production, this will be restricted.
 CORS_ALLOW_ALL_ORIGINS = True
 
-# Configuration des fichiers média (uploads)
+# Media files configuration (uploads)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 
-# URLs de redirection pour l'authentification
+# Authentication redirect URLs
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard:dashboard"
 LOGOUT_REDIRECT_URL = "login"

@@ -5,7 +5,7 @@
 
 {% block head_extra %}
     <style>
-        /* Styles pour la carte de question en mode plein écran */
+        /* Styles for the question card in fullscreen mode */
         .whiteboard-workspace:fullscreen .question-card.in-fullscreen {
             display: block;
             position: absolute;
@@ -15,77 +15,26 @@
             height: auto;
             max-height: 40%;
             z-index: 10;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
             border: 1px solid #ccc;
             background-color: white;
-            resize: both; /* Permet de redimensionner */
-            overflow: auto; /* Ajoute des barres de défilement si nécessaire */
+            resize: both; /* Allows resizing */
+            overflow: auto; /* Adds scrollbars if necessary */
         }
 
         .whiteboard-workspace:fullscreen .question-card.in-fullscreen #questionImageContainer {
-            max-height: 200px; /* Limite la hauteur de l'image pour la lisibilité */
+            max-height: 200px; /* Limits the image height for readability */
         }
 
-        /* Cache la carte quand elle n'est pas en plein écran */
+        /* Hides the card when not in fullscreen */
         .question-card.in-fullscreen:not(:fullscreen) {
             display: none;
         }
 
-        /* Styles pour l'arborescence des documents */
-        .document-browser {
-            background-color: var(--card-bg);
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: var(--shadow-md);
-            max-width: 800px;
-            margin: 2rem auto;
-        }
-        .category-tree, .category-tree ul {
-            list-style: none;
-            padding-left: 20px;
-        }
-        .category-tree li {
-            margin-bottom: 0.5rem;
-        }
-        .category-item, .document-link {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px;
-            border-radius: 6px;
-        }
-        .category-item {
-            font-weight: 600;
-            font-size: 1.2rem;
-            cursor: pointer;
-        }
-        .category-item .icon {
-            transition: transform 0.2s ease-in-out;
-        }
-        .category-item.collapsed .icon {
-            transform: rotate(-90deg);
-        }
-        .document-link {
-            justify-content: space-between;
-            background-color: var(--background-color);
-            border: 1px solid var(--border-color);
-            text-decoration: none;
-            color: var(--text-color);
-            transition: background-color 0.2s, transform 0.2s;
-        }
-        .document-link:hover {
-            background-color: #e9f5ff;
-            transform: translateX(5px);
-        }
-        .document-link .doc-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .document-link .fa-file-alt { color: var(--primary-color); }
-        .document-link .start-arrow { color: var(--secondary-color); }
+        /* Allows the toolbar to wrap if it's too long */
+        .toolbar { flex-wrap: wrap; }
     </style>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
@@ -96,6 +45,7 @@
 {% endblock %}
 
 {% block content %}
+{# Tutor Interface: Displayed when a session is ongoing #}
 {% if ongoing_session %}
     <div id="tutor-interface" class="tutor-container">
         <main id="workspace">
@@ -148,8 +98,9 @@
                             <i id="thickness-icon" class="fas fa-pen-nib"></i>
                             <input type="range" id="sizeSlider" min="1" max="50" value="5" title="Épaisseur">
                         </div>
-                        <div class="tool-divider"></div>
-                        <button id="clearCanvasBtn" class="tool clear-btn" title="Effacer tout"><i class="fas fa-trash-alt"></i></button>
+                        <div class="tool-group">
+                            <button id="clearCanvasBtn" class="tool" title="Effacer tout"><i class="fas fa-trash-alt"></i></button>
+                        </div>
                         <div class="tool-divider"></div>
                         <div class="tool-group">
                             <button id="undoBtn" class="tool" title="Annuler"><i class="fas fa-undo"></i></button>
@@ -157,6 +108,9 @@
                         </div>
                         <div class="tool-divider"></div>
                         <button id="fullscreenBtn" class="tool" title="Plein écran"><i class="fas fa-expand"></i></button>
+                        <button id="restoreLastBtn" class="tool" title="Restaurer le dernier envoi" style="background-color: #28a745; color: white; border-color: #28a745;">
+                            <i class="fas fa-history"></i>
+                        </button>
                     </div>
                     
                     <div id="canvas-container">
@@ -174,6 +128,7 @@
             </div>
         </main>
     </div>
+{# Document Browser: Displayed when no session is active, allowing exercise selection #}
 {% else %}
     <div class="document-browser">
         <div class="dashboard-header" style="text-align: center; margin-bottom: 2rem;">
@@ -191,18 +146,18 @@
 
 {% block scripts %}
 <script>
-    // Script pour rendre l'arborescence interactive
+    // Script to make the document tree interactive
     document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.category-item').forEach(item => {
             item.addEventListener('click', function() {
                 this.classList.toggle('collapsed');
                 const sublist = this.nextElementSibling;
                 if (sublist && sublist.tagName === 'UL') {
-                    sublist.style.display = sublist.style.display === 'none' ? 'block' : 'none';
+                    sublist.style.display = (sublist.style.display === 'none' || sublist.style.display === '') ? 'block' : 'none';
                 }
             });
 
-            // Fermer tous les niveaux par défaut
+            // Collapse all levels by default
             const sublist = item.nextElementSibling;
             if (sublist && sublist.tagName === 'UL') {
                 item.classList.add('collapsed');

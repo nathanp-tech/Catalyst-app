@@ -4,12 +4,12 @@ from django.contrib.auth.models import Group
 
 class GroupConfiguration(models.Model):
     """
-    Stocke une configuration de groupes d'élèves pour une classe donnée.
+    Stores a configuration of student groups for a given class.
     """
     teacher_class = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='group_configurations')
-    name = models.CharField(max_length=255, help_text="Ex: Groupes pour le projet 'Volcans'")
-    configuration = models.JSONField(help_text="La structure des groupes, ex: [['Alice', 'Bob'], ['Charlie']]")
+    name = models.CharField(max_length=255, help_text="E.g., Groups for the 'Volcanoes' project")
+    configuration = models.JSONField(help_text="The group structure, e.g., [['Alice', 'Bob'], ['Charlie']]")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Configuration '{self.name}' pour la classe {self.teacher_class.name}"
+        return f"Configuration '{self.name}' for class {self.teacher_class.name}"

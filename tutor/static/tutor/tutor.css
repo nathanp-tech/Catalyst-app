@@ -13,10 +13,10 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   background-color: var(--background-color);
   color: var(--text-color);
-  /* overflow: hidden; a été retiré pour permettre le scroll par défaut */
+  /* overflow: hidden; was removed to allow default scrolling */
 }
 
-/* Nouvelle classe pour bloquer le scroll PENDANT le dessin */
+/* New class to block scrolling WHILE drawing */
 body.drawing-active {
     overflow: hidden;
 }
@@ -25,7 +25,7 @@ body.drawing-active {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh; /* Utiliser min-height pour permettre l'expansion */
+  min-height: 100vh; /* Use min-height to allow expansion */
   padding: 15px;
   box-sizing: border-box;
 }
@@ -57,13 +57,13 @@ body.drawing-active {
   display: flex; 
   gap: 15px; 
   width: 100%; 
-  height: calc(100vh - 100px); /* Hauteur réduite pour voir le footer */
+  height: calc(100vh - 100px); /* Reduced height to see the footer */
   max-width: 1800px; 
   margin: auto;
 }
 #workspace.hidden, #welcomeScreen.hidden { display: none; }
 
-.left-panel, .right-panel { display: flex; flex-direction: column; gap: 15px; height: 100%; min-height: 0; /* Empêche le débordement de flexbox */ }
+.left-panel, .right-panel { display: flex; flex-direction: column; gap: 15px; height: 100%; min-height: 0; /* Prevents flexbox overflow */ }
 .left-panel { flex: 1 1 45%; min-width: 350px; }
 .right-panel { flex: 1 1 55%; min-width: 450px; }
 
@@ -82,25 +82,25 @@ body.drawing-active {
     margin-left: 10px;
 }
 .end-exercise-btn:hover {
-    background-color: #c0392b; /* Rouge plus foncé au survol */
+    background-color: #c0392b; /* Darker red on hover */
 }
 #questionImageContainer { flex-grow: 1; overflow: auto; cursor: grab; background: #f8f9fa; border-radius: 8px; position: relative; }
 #questionImageDisplay { transform-origin: top left; }
 
 .chat-container {
   flex: 1 1 60%;
-  background: var(--background-color); /* Fond neutre et cohérent */
+  background: var(--background-color); /* Neutral and consistent background */
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
   padding: 20px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  gap: 12px; /* Espace entre les bulles de message */
+  gap: 12px; /* Space between message bubbles */
 }
 .chat-message {
   padding: 10px 15px;
-  border-radius: 18px; /* Bulles plus arrondies */
+  border-radius: 18px; /* More rounded bubbles */
   max-width: 80%;
   line-height: 1.5;
   word-wrap: break-word;
@@ -108,14 +108,14 @@ body.drawing-active {
 }
 .chat-message.user { background-color: var(--primary-color); color: white; align-self: flex-end; border-bottom-right-radius: 5px; }
 .chat-message.tutor { background-color: var(--card-bg); color: var(--text-color); align-self: flex-start; border-bottom-left-radius: 5px; }
-.chat-message.tutor .comment-text { color: var(--text-color); } /* Assure que le texte est lisible */
+.chat-message.tutor .comment-text { color: var(--text-color); } /* Ensures text is readable */
 .chat-message.user .comment-text { color: white; }
 .chat-message img { max-width: 100%; border-radius: 8px; margin-top: 5px; }
 
 .whiteboard-workspace, .input-area { min-width: 0; }
 .whiteboard-workspace { flex-grow: 1; display: flex; flex-direction: column; background: var(--card-bg); border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden; }
 
-/* Styles pour la barre d'outils */
+/* Toolbar styles */
 .toolbar { display: flex; align-items: center; padding: 8px 15px; background-color: #f8f9fa; border-bottom: 1px solid var(--border-color); gap: 10px; flex-shrink: 0; }
 .tool-group { display: flex; align-items: center; gap: 5px; }
 .tool-divider { width: 1px; height: 24px; background-color: var(--border-color); }
@@ -127,9 +127,9 @@ body.drawing-active {
 .thickness-group { gap: 8px; }
 input[type="color"] { width: 28px; height: 28px; border: none; padding: 0; background: none; border-radius: 5px; overflow: hidden; }
 
-/* Conteneur du canvas Fabric.js */
+/* Fabric.js canvas container */
 #canvas-container { position: relative; width: 100%; height: 100%; flex-grow: 1; }
-#whiteboard { display: block; } /* Fabric.js gère la taille */
+#whiteboard { display: block; } /* Fabric.js handles the size */
 
 .input-area { flex-shrink: 0; display: flex; gap: 10px; background: var(--card-bg); padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); align-items: center; }
 #textInput { flex-grow: 1; padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); resize: none; min-height: 50px; box-sizing: border-box; font-size: 1rem; }
@@ -139,14 +139,14 @@ button { background-color: var(--primary-color); color: white; border: none; pad
 button:hover { background-color: var(--secondary-color); }
 button:disabled { background-color: #e0e0e0; cursor: not-allowed; }
 
-/* --- RESPONSIVE --- */
+/* --- RESPONSIVE DESIGN --- */
 @media (max-width: 1024px) {
     #workspace {
         flex-direction: column;
-        height: auto; /* Permet au contenu de déterminer la hauteur */
+        height: auto; /* Allows content to determine the height */
     }
     .left-panel, .right-panel {
         min-width: 100%;
-        height: 80vh; /* Donne une hauteur substantielle à chaque panneau */
+        height: 80vh; /* Gives a substantial height to each panel */
     }
 }

@@ -13,15 +13,15 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
         :root {
-            /* Palette Light Mode */
-            --primary-color: #4A90E2;      /* Un bleu moderne et confiant */
-            --secondary-color: #50E3C2;    /* Turquoise pour accents secondaires */
-            --background-color: #F8F9FA;   /* Un gris très clair pour le fond */
-            --card-bg: #FFFFFF;            /* Fond des cartes et éléments surélevés */
-            --border-color: #DEE2E6;       /* Bordures subtiles */
-            --text-color: #343A40;         /* Texte principal (noir doux) */
-            --text-muted: #6C757D;         /* Texte secondaire (gris) */
-            --header-color: #2C3E50;       /* Couleur du texte des titres/en-têtes */
+            /* Light Mode Palette */
+            --primary-color: #4A90E2;      /* A modern and confident blue */
+            --secondary-color: #50E3C2;    /* Turquoise for secondary accents */
+            --background-color: #F8F9FA;   /* A very light gray for the background */
+            --card-bg: #FFFFFF;            /* Background for cards and elevated elements */
+            --border-color: #DEE2E6;       /* Subtle borders */
+            --text-color: #343A40;         /* Main text (soft black) */
+            --text-muted: #6C757D;         /* Secondary text (gray) */
+            --header-color: #2C3E50;       /* Text color for titles/headers */
             --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
             --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
         }
@@ -116,7 +116,11 @@
     <header>
         <nav class="navbar">
             <div class="logo">
-                <a href="{% url 'home' %}">Catalyst 🚀</a>
+                {% if user.is_authenticated %}
+                    <a href="{% url 'dashboard:dashboard' %}">Catalyst 🚀</a>
+                {% else %}
+                    <a href="{% url 'home' %}">Catalyst 🚀</a>
+                {% endif %}
             </div>
             <div class="nav-links">
                 {% if user.is_authenticated %}

@@ -4,15 +4,15 @@ from django.contrib.auth.decorators import login_required
 from .views import TutorInteractionView, TutorPageView, TutorImageAnalysisView, EndSessionView, SaveWhiteboardView, StartSessionView
 
 urlpatterns = [
-    # La page HTML pour le chat
+    # The HTML page for the chat
     path("", login_required(TutorPageView.as_view()), name="tutor-page"),
     path('start-session/<int:document_id>/', StartSessionView.as_view(), name='start-session'),
-    # L'endpoint API pour l'analyse d'image
+    # API endpoint for image analysis
     path("api/analyze-image/", TutorImageAnalysisView.as_view(), name="tutor-analyze-image"),
-    # L'endpoint API pour l'interaction
+    # API endpoint for interaction
     path("api/interact/", TutorInteractionView.as_view(), name="tutor-interact"),
-    # NOUVELLE URL: Endpoint pour terminer une session
+    # NEW URL: Endpoint to end a session
     path("api/end-session/", EndSessionView.as_view(), name="end-session"),
-    # NOUVELLE URL: Endpoint pour sauvegarder l'état du tableau blanc
+    # NEW URL: Endpoint to save the whiteboard state
     path("api/save-whiteboard/", SaveWhiteboardView.as_view(), name="save-whiteboard"),
 ]

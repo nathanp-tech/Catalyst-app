@@ -6,17 +6,17 @@ from tutor.models import ChatSession
 
 def generate_and_save_session_summary(session_id):
     """
-    Génère un résumé pour une session de chat donnée en utilisant OpenAI et le sauvegarde dans la base de données.
-    Cette fonction est conçue pour être exécutée en arrière-plan afin de ne pas bloquer la requête principale.
+    Generates a summary for a given chat session using OpenAI and saves it to the database.
+    This function is designed to be run in the background so as not to block the main request.
     """
     try:
         session = ChatSession.objects.get(id=session_id)
         
-        # Si un résumé existe déjà, on ne fait rien.
+        # If a summary already exists, do nothing.
         if session.summary_data:
             return
 
-        # Construire l'historique de la conversation pour le prompt
+        # Build the conversation history for the prompt
         chat_history = ""
         for msg in session.messages.order_by('timestamp'):
             role = "Élève" if msg.role == 'user' else "Tuteur"
@@ -29,7 +29,7 @@ def generate_and_save_session_summary(session_id):
                 content_text = msg.content
             chat_history += f"{role}: {content_text.strip()}\n"
 
-        # Prompt pour l'IA
+        # Prompt for the AI
         prompt = f"""
         Analyse la conversation suivante entre un tuteur et un élève.
         Contexte de l'exercice:
@@ -51,4 +51,4 @@ def generate_and_save_session_summary(session_id):
         session.save()
 
     except Exception as e:
-        print(f"Erreur lors de la génération automatique du résumé pour la session {session_id}: {e}")
+        print(f"Error during automatic summary generation for session {session_id}: {e}")

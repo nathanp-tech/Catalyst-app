@@ -19,14 +19,14 @@ from .models import GroupConfiguration
 
 
 def is_user_in_group(user, group_name):
-    """Vérifie si un utilisateur appartient à un groupe spécifique."""
+    """Checks if a user belongs to a specific group."""
     return user.groups.filter(name=group_name).exists()
 
 class DashboardView(LoginRequiredMixin, View):
     """
-    Affiche le tableau de bord approprié en fonction du groupe de l'utilisateur.
+    Displays the appropriate dashboard based on the user's group.
     """
-    login_url = '/accounts/login/' # Redirige si non connecté
+    login_url = '/accounts/login/' # Redirect if not logged in
 
     def get(self, request, *args, **kwargs):
         user = request.user
@@ -38,11 +38,11 @@ class DashboardView(LoginRequiredMixin, View):
             }
             return render(request, 'dashboard/teacher_dashboard.html', context)
         
-        # Par défaut, si l'utilisateur n'est pas un professeur, on affiche le tableau de bord élève.
+        # By default, if the user is not a teacher, display the student dashboard.
         else:
             student_sessions = ChatSession.objects.filter(student=user).select_related('document').order_by('-start_time')
             
-            # Ajout du statut pour chaque session
+            # Add status for each session
             for session in student_sessions:
                 session.status = "Terminé" if session.end_time else "En cours"
                 session.status_class = "completed" if session.end_time else "in-progress"
@@ -56,13 +56,13 @@ class DashboardView(LoginRequiredMixin, View):
 
 
 def is_teacher(user):
-    """Vérifie si l'utilisateur est un professeur."""
+    """Checks if the user is a teacher."""
     return is_user_in_group(user, 'Professeurs')
 
 
 class StudentProgressionView(LoginRequiredMixin, TemplateView):
     """
-    Affiche une page de progression gamifiée pour l'élève.
+    Displays a gamified progression page for the student.
     """
     template_name = "dashboard/student_progression.html"
 
@@ -71,7 +71,7 @@ class StudentProgressionView(LoginRequiredMixin, TemplateView):
         student = self.request.user
         sessions = ChatSession.objects.filter(student=student).order_by('start_time')
 
-        # --- 1. Statistiques générales ---
+        # --- 1. General statistics ---
         total_sessions = sessions.count()
         total_duration_seconds = sum(((s.end_time - s.start_time).total_seconds() for s in sessions if s.end_time), 0)
         total_messages = sum(s.messages.count() for s in sessions)
@@ -80,7 +80,7 @@ class StudentProgressionView(LoginRequiredMixin, TemplateView):
         context['total_duration_minutes'] = int(total_duration_seconds / 60)
         context['total_messages'] = total_messages
 
-        # --- 2. Analyse des erreurs (pour les graphiques) ---
+        # --- 2. Error analysis (for charts) ---
         error_key_map = {
             "Erreurs de calcul": "calcul", "Erreurs de substitution": "substitution",
             "Erreurs de procédure": "procedure", "Erreurs conceptuelles": "conceptuelle",
@@ -90,13 +90,13 @@ class StudentProgressionView(LoginRequiredMixin, TemplateView):
 
         for session in sessions:
             if session.summary_data and 'error_analysis' in session.summary_data:
-                # Pour le graphique circulaire global
+                # For the global pie chart
                 for error, count in session.summary_data['error_analysis'].items():
                     short_key = error_key_map.get(error)
                     if short_key:
                         overall_error_counts[short_key] += count
                 
-                # Pour le graphique d'évolution
+                # For the evolution chart
                 week_start = session.start_time.date() - timedelta(days=session.start_time.weekday())
                 for error, count in session.summary_data['error_analysis'].items():
                     short_key = error_key_map.get(error)
@@ -105,7 +105,7 @@ class StudentProgressionView(LoginRequiredMixin, TemplateView):
 
         context['overall_error_counts_json'] = json.dumps(overall_error_counts)
         
-        # Formater les données pour le graphique d'évolution
+        # Format data for the evolution chart
         sorted_weeks = sorted(errors_over_time.keys())
         evolution_data = {
             'labels': [week.strftime('%d/%m') for week in sorted_weeks],
@@ -118,7 +118,7 @@ class StudentProgressionView(LoginRequiredMixin, TemplateView):
         }
         context['error_evolution_json'] = json.dumps(evolution_data)
 
-        # --- 3. Gamification : Badges ---
+        # --- 3. Gamification: Badges ---
         badges = []
         if total_sessions >= 1:
             badges.append({'name': 'Premier Pas', 'icon': 'fa-shoe-prints', 'desc': 'Avoir terminé sa première session.'})
@@ -130,7 +130,7 @@ class StudentProgressionView(LoginRequiredMixin, TemplateView):
             badges.append({'name': 'Explorateur', 'icon': 'fa-compass', 'desc': 'Avoir travaillé sur 5 exercices différents.'})
         
         context['badges'] = badges
-        context['points'] = total_sessions * 10 + int(total_duration_seconds / 60) # Simple calcul de points
+        context['points'] = total_sessions * 10 + int(total_duration_seconds / 60) # Simple point calculation
 
         return context
 
@@ -138,14 +138,14 @@ class StudentProgressionView(LoginRequiredMixin, TemplateView):
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class LogbookListView(LoginRequiredMixin, TemplateView):
     """
-    Affiche la liste de tous les journaux de bord pédagogiques remplis par l'enseignant.
+    Displays a list of all pedagogical logbooks filled out by the teacher.
     """
     template_name = "dashboard/logbook_list.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # On ne récupère que les sessions où l'enseignant a rempli au moins une partie du journal
-        # et qui appartiennent aux élèves de cet enseignant (implicitement via les documents)
+        # We only retrieve sessions where the teacher has filled at least part of the logbook
+        # and which belong to that teacher's students (implicitly via documents)
         sessions_with_logbooks = ChatSession.objects.filter(
             teacher_analysis__isnull=False
         ).exclude(
@@ -158,7 +158,7 @@ class LogbookListView(LoginRequiredMixin, TemplateView):
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class ClassDashboardView(LoginRequiredMixin, TemplateView):
     """
-    Affiche un tableau de bord de classe avec les performances des élèves par exercice.
+    Displays a class dashboard with student performance by exercise.
     """
     template_name = "dashboard/class_dashboard.html"
 
@@ -166,7 +166,7 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         User = get_user_model()
 
-        # 1. Préparer le contexte pour les filtres
+        # 1. Prepare context for filters
         context['classes'] = Group.objects.exclude(name='Professeurs')
         context['exercise_categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(
             'children__children__documents'
@@ -177,7 +177,7 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
         context['selected_class_id'] = selected_class_id
         context['selected_exercise_id'] = selected_exercise_id
 
-        # 2. Récupérer les élèves si une classe est sélectionnée
+        # 2. Retrieve students if a class is selected
         students = []
         selected_group = None
         if selected_class_id:
@@ -189,16 +189,16 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
                     'chatsession_set__messages'
                 )
             except Group.DoesNotExist:
-                pass # Le groupe n'existe pas, on renvoie une liste d'élèves vide
+                pass # The group does not exist, return an empty student list
 
-        # 3. Agréger les données de performance pour les élèves trouvés
+        # 3. Aggregate performance data for the found students
         student_performance = []
         for student in students:
             performance_details = []
             sessions_for_student = student.chatsession_set.all()
 
             if selected_exercise_id:
-                # Vue par exercice
+                # View by exercise
                 sessions_for_doc = sessions_for_student.filter(document_id=selected_exercise_id)
                 if sessions_for_doc.exists():
                     latest_session = sessions_for_doc.latest('start_time')
@@ -218,7 +218,7 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
                         'last_activity': latest_session.start_time.strftime("%d/%m/%Y %H:%M"),
                     })
             else:
-                # Vue agrégée "Tous les exercices"
+                # Aggregated view "All exercises"
                 if sessions_for_student.exists():
                     error_key_map = {
                         "Erreurs de calcul": "calcul",
@@ -260,14 +260,14 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class SavedGroupsView(LoginRequiredMixin, TemplateView):
     """
-    Affiche les configurations de groupes enregistrées pour une classe sélectionnée.
+    Displays saved group configurations for a selected class.
     """
     template_name = "dashboard/saved_groups.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Récupérer toutes les classes pour le sélecteur
+        # Get all classes for the selector
         all_classes = Group.objects.exclude(name='Professeurs')
         context['all_classes'] = all_classes
 
@@ -288,7 +288,7 @@ class SavedGroupsView(LoginRequiredMixin, TemplateView):
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class SessionListView(LoginRequiredMixin, TemplateView):
     """
-    Affiche la liste de toutes les sessions de tutorat pour les professeurs.
+    Displays a list of all tutoring sessions for teachers.
     """
     template_name = "dashboard/session_list.html"
 
@@ -298,11 +298,11 @@ class SessionListView(LoginRequiredMixin, TemplateView):
         document_id = self.request.GET.get('document_id')
         sessions = ChatSession.objects.select_related('student', 'document').prefetch_related('student__groups').all().order_by('-start_time')
 
-        # Récupérer tous les documents pour le filtre
+        # Get all documents for the filter
         all_documents = Document.objects.all().order_by('title')
         context['all_documents'] = all_documents
 
-        # Si un student_id est passé en paramètre, on l'utilise pour le filtre
+        # If a student_id is passed as a parameter, use it for filtering
         context['filtered_student_id'] = student_id if student_id else ''
         context['filtered_document_id'] = document_id if document_id else ''
 
@@ -319,8 +319,8 @@ class SessionListView(LoginRequiredMixin, TemplateView):
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class SessionDetailView(LoginRequiredMixin, DetailView):
     """
-    Affiche le détail d'une session de conversation pour les professeurs.
-    Gère également la sauvegarde des notes.
+    Displays the details of a conversation session for teachers.
+    Also handles saving notes.
     """
     model = ChatSession
     template_name = "dashboard/session_detail.html"
@@ -328,7 +328,7 @@ class SessionDetailView(LoginRequiredMixin, DetailView):
     pk_url_kwarg = 'session_id'
 
     def get_queryset(self):
-        # S'assurer que les données associées sont chargées efficacement
+        # Ensure that related data is loaded efficiently
         return ChatSession.objects.select_related('student', 'document').prefetch_related('messages')
 
     def get_context_data(self, **kwargs):
@@ -339,10 +339,10 @@ class SessionDetailView(LoginRequiredMixin, DetailView):
     def post(self, request, *args, **kwargs):
         session = self.get_object()
         
-        # Récupérer l'analyse existante ou initialiser un dictionnaire
+        # Retrieve existing analysis or initialize a dictionary
         teacher_analysis_data = session.teacher_analysis or {}
 
-        # Mettre à jour avec les données du formulaire du journal de bord
+        # Update with data from the logbook form
         teacher_analysis_data['divergence_analysis'] = request.POST.get('divergence_analysis', '')
         teacher_analysis_data['remediation_strategy'] = request.POST.get('remediation_strategy', '')
         teacher_analysis_data['ai_influence_rating'] = request.POST.get('ai_influence_rating')
@@ -351,13 +351,13 @@ class SessionDetailView(LoginRequiredMixin, DetailView):
         session.teacher_analysis = teacher_analysis_data
         session.save()
         
-        # Redirige vers la même page pour voir la confirmation
+        # Redirect to the same page to see the confirmation
         return redirect('dashboard:session-detail', session_id=session.id)
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class SessionChatContentView(LoginRequiredMixin, View):
     """
-    Vue API qui renvoie le contenu HTML d'une conversation pour la génération de PDF.
+    API view that returns the HTML content of a conversation for PDF generation.
     """
     def get(self, request, *args, **kwargs):
         session_id = kwargs.get('session_id')
@@ -365,7 +365,7 @@ class SessionChatContentView(LoginRequiredMixin, View):
             ChatSession.objects.prefetch_related('messages'),
             id=session_id
         )
-        # On utilise un template partiel pour ne rendre que le chat
+        # Use a partial template to render only the chat
         html_content = render_to_string(
             'dashboard/partials/chat_content.html', 
             {'session': session, 'is_pdf_render': True}
@@ -376,7 +376,7 @@ class SessionChatContentView(LoginRequiredMixin, View):
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class CoAnalysisView(LoginRequiredMixin, DetailView):
     """
-    Affiche l'interface de co-analyse Enseignant-IA pour une session.
+    Displays the Teacher-AI co-analysis interface for a session.
     """
     model = ChatSession
     template_name = 'dashboard/co_analysis.html'
@@ -385,7 +385,7 @@ class CoAnalysisView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['error_choices'] = ChatSession.TEACHER_ERROR_CHOICES
-        # S'assure que le résumé IA est disponible pour la comparaison
+        # Ensures the AI summary is available for comparison
         if self.object.summary_data and 'error_analysis' in self.object.summary_data:
             context['ai_error_analysis'] = self.object.summary_data['error_analysis']
             context['ai_summary_text'] = self.object.summary_data.get('summary_text', "Aucun résumé textuel fourni par l'IA.")
@@ -406,29 +406,29 @@ class CoAnalysisView(LoginRequiredMixin, DetailView):
         }
         session.teacher_analysis = teacher_analysis_data
         session.save()
-        # Redirige vers la même page pour voir le résultat de la comparaison
+        # Redirect to the same page to see the comparison result
         return redirect('dashboard:co-analysis', pk=session.pk)
 
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class DeleteSessionView(LoginRequiredMixin, View):
     """
-    Vue API pour supprimer une session de chat.
+    API view to delete a chat session.
     """
     def delete(self, request, *args, **kwargs):
         session_id = kwargs.get('session_id')
         try:
             session = ChatSession.objects.get(id=session_id)
             session.delete()
-            return JsonResponse({'success': True, 'message': 'Session supprimée avec succès.'})
+            return JsonResponse({'success': True, 'message': 'Session deleted successfully.'})
         except ChatSession.DoesNotExist:
-            return JsonResponse({'error': 'Session non trouvée.'}, status=404)
+            return JsonResponse({'error': 'Session not found.'}, status=404)
 
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class SessionSummaryView(LoginRequiredMixin, View):
     """
-    Vue API qui génère un résumé de la session via l'IA pour l'enseignant.
+    API view that generates a session summary via AI for the teacher.
     """
     def get(self, request, *args, **kwargs):
         session_id = kwargs.get('session_id')
@@ -437,21 +437,21 @@ class SessionSummaryView(LoginRequiredMixin, View):
             id=session_id
         )
 
-        # La génération est maintenant automatique. On vérifie si le résumé est prêt.
+        # Generation is now automatic. Check if the summary is ready.
         if session.summary_data:
             return JsonResponse(session.summary_data)
         elif session.end_time:
-            # La session est terminée mais le résumé n'est pas encore là
+            # The session is over but the summary is not yet available
             return JsonResponse({'status': 'processing', 'message': 'Le résumé est en cours de génération. Veuillez réessayer dans quelques instants.'})
         else:
-            # La session n'est pas encore terminée
+            # The session is not yet over
             return JsonResponse({'status': 'not_ended', 'message': 'Le résumé sera généré automatiquement à la fin de la session.'})
 
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class ClassManagementView(LoginRequiredMixin, TemplateView):
     """
-    Affiche la page de gestion des classes et des élèves.
+    Displays the class and student management page.
     """
     template_name = "dashboard/class_management.html"
 
@@ -459,10 +459,10 @@ class ClassManagementView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         User = get_user_model()
 
-        # Récupérer toutes les classes (Groupes sauf 'Professeurs')
+        # Get all classes (Groups except 'Professeurs')
         classes = Group.objects.exclude(name='Professeurs').prefetch_related('user_set').order_by('name')
         
-        # Récupérer les élèves non assignés
+        # Get unassigned students
         assigned_student_ids = ChatMessage.objects.filter(
             session__student__groups__isnull=False
         ).values_list('session__student_id', flat=True).distinct()
@@ -483,9 +483,9 @@ class ClassCreateView(LoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         class_name = request.POST.get('class_name')
         if not class_name:
-            return JsonResponse({'error': 'Le nom de la classe est requis.'}, status=400)
+            return JsonResponse({'error': 'Class name is required.'}, status=400)
         if Group.objects.filter(name=class_name).exists():
-            return JsonResponse({'error': 'Une classe avec ce nom existe déjà.'}, status=400)
+            return JsonResponse({'error': 'A class with this name already exists.'}, status=400)
         
         new_class = Group.objects.create(name=class_name)
         return JsonResponse({'id': new_class.id, 'name': new_class.name})
@@ -500,18 +500,18 @@ class ClassActionView(LoginRequiredMixin, View):
         if action == 'rename':
             new_name = request.POST.get('new_name')
             if not new_name:
-                return JsonResponse({'error': 'Le nouveau nom est requis.'}, status=400)
+                return JsonResponse({'error': 'New name is required.'}, status=400)
             group.name = new_name
             group.save()
             return JsonResponse({'id': group.id, 'name': group.name})
 
         elif action == 'delete':
             if group.user_set.exists():
-                return JsonResponse({'error': 'Impossible de supprimer une classe non vide.'}, status=400)
+                return JsonResponse({'error': 'Cannot delete a non-empty class.'}, status=400)
             group.delete()
             return JsonResponse({'success': True, 'id': group_id})
 
-        return JsonResponse({'error': 'Action non valide.'}, status=400)
+        return JsonResponse({'error': 'Invalid action.'}, status=400)
 
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
@@ -522,11 +522,11 @@ class StudentCreateView(LoginRequiredMixin, View):
         class_id = request.POST.get('class_id')
 
         if not username or not password:
-            return JsonResponse({'error': 'Nom d\'utilisateur et mot de passe requis.'}, status=400)
+            return JsonResponse({'error': 'Username and password are required.'}, status=400)
         
         User = get_user_model()
         if User.objects.filter(username=username).exists():
-            return JsonResponse({'error': 'Cet utilisateur existe déjà.'}, status=400)
+            return JsonResponse({'error': 'This user already exists.'}, status=400)
 
         student = User.objects.create_user(username=username, password=password)
         
@@ -535,7 +535,7 @@ class StudentCreateView(LoginRequiredMixin, View):
                 group = Group.objects.get(id=class_id)
                 student.groups.add(group)
             except Group.DoesNotExist:
-                pass # L'élève est créé mais non assigné
+                pass # The student is created but not assigned
 
         return JsonResponse({
             'id': student.id, 
@@ -552,18 +552,18 @@ class StudentActionView(LoginRequiredMixin, View):
 
         if action == 'move':
             target_class_id = request.POST.get('target_class_id')
-            student.groups.clear() # Retire l'élève de toutes ses classes actuelles
+            student.groups.clear() # Remove the student from all current classes
             if target_class_id:
                 target_class = get_object_or_404(Group, id=target_class_id)
                 student.groups.add(target_class)
             return JsonResponse({'success': True, 'student_id': user_id, 'target_class_id': target_class_id or ''})
 
         elif action == 'delete':
-            # Attention: ceci supprime l'utilisateur et toutes ses données associées (sessions, etc.)
+            # Warning: this deletes the user and all associated data (sessions, etc.)
             student.delete()
             return JsonResponse({'success': True, 'student_id': user_id})
 
-        return JsonResponse({'error': 'Action non valide.'}, status=400)
+        return JsonResponse({'error': 'Invalid action.'}, status=400)
 
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
@@ -578,14 +578,14 @@ class CreateStudentGroupsView(LoginRequiredMixin, View):
         messages = data.get('messages', [])
 
         if not class_id or not num_groups:
-            return JsonResponse({'error': 'ID de classe et nombre de groupes requis.'}, status=400)
+            return JsonResponse({'error': 'Class ID and number of groups are required.'}, status=400)
 
         try:
             teacher_class = Group.objects.get(id=class_id)
         except Group.DoesNotExist:
-            return JsonResponse({'error': 'Classe non trouvée.'}, status=404)
+            return JsonResponse({'error': 'Class not found.'}, status=404)
 
-        # 1. Récupérer les élèves et leurs performances globales
+        # 1. Get students and their overall performance
         students = get_user_model().objects.filter(groups=teacher_class)
         student_data_for_prompt = []
         for student in students:
@@ -607,7 +607,7 @@ class CreateStudentGroupsView(LoginRequiredMixin, View):
                 f"erreurs fréquentes: {json.dumps(dict(aggregated_errors))}"
             )
 
-        # 2. Construire le prompt pour l'IA
+        # 2. Build the prompt for the AI
         system_prompt = f"""
         Tu es un assistant pédagogique expert. Un enseignant souhaite créer {num_groups} groupes de travail pour sa classe "{teacher_class.name}".
         Ton objectif est de proposer une répartition équilibrée (hétérogène par défaut) en te basant sur leurs performances. Toutes tes réponses doivent être en français.
@@ -636,7 +636,7 @@ class CreateStudentGroupsView(LoginRequiredMixin, View):
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class SaveGroupConfigurationView(LoginRequiredMixin, View):
     """
-    Vue API pour sauvegarder une configuration de groupes d'élèves.
+    API view to save a student group configuration.
     """
     def post(self, request, *args, **kwargs):
         data = json.loads(request.body)
@@ -645,24 +645,24 @@ class SaveGroupConfigurationView(LoginRequiredMixin, View):
         groups = data.get('groups')
 
         if not all([class_id, config_name, groups]):
-            return JsonResponse({'error': 'Données manquantes.'}, status=400)
+            return JsonResponse({'error': 'Missing data.'}, status=400)
 
         GroupConfiguration.objects.create(teacher_class_id=class_id, name=config_name, configuration=groups)
-        return JsonResponse({'success': True, 'message': 'Configuration des groupes enregistrée.'})
+        return JsonResponse({'success': True, 'message': 'Group configuration saved.'})
 
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class ClassAnalyticsAPIView(LoginRequiredMixin, View):
     """
-    Fournit des données agrégées pour les graphiques d'analyse de la classe.
+    Provides aggregated data for class analysis charts.
     """
     def get(self, request, class_id, *args, **kwargs):
         try:
             teacher_class = Group.objects.get(id=class_id)
         except Group.DoesNotExist:
-            return JsonResponse({'error': 'Classe non trouvée.'}, status=404)
+            return JsonResponse({'error': 'Class not found.'}, status=404)
 
-        # Pré-charger toutes les sessions et messages des élèves de la classe en 2 requêtes
+        # Preload all sessions and messages for students in the class in 2 queries
         students = get_user_model().objects.filter(
             groups=teacher_class
         ).prefetch_related('chatsession_set__messages')

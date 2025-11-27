@@ -23,17 +23,17 @@ from .views import HomeView
 
 urlpatterns = [
     path("", HomeView.as_view(), name="home"),
-    # path("api/", APIRootView.as_view(), name="api-root"), # Décommenter si vous avez besoin d'une racine pour l'API
+    # path("api/", APIRootView.as_view(), name="api-root"), # Uncomment if you need an API root
     path("admin/", admin.site.urls),
-    path("dashboard/", include(("dashboard.urls", "dashboard"), namespace="dashboard")), # Page web du tableau de bord
-    path("tutor/", include("tutor.urls")), # Page web et API du tuteur
-    path("documents/", include("documents.urls")), # URLs pour la gestion des documents
+    path("dashboard/", include(("dashboard.urls", "dashboard"), namespace="dashboard")), # Dashboard web pages
+    path("tutor/", include("tutor.urls")), # Tutor web page and API
+    path("documents/", include("documents.urls")), # URLs for document management
 
-    # URLs d'authentification (login, logout, signup)
-    # On les préfixe par "accounts/" par convention
+    # Authentication URLs (login, logout, signup)
+    # Prefixed with "accounts/" by convention
     path("accounts/", include("users.urls")),
 ]
 
-# Servir les fichiers média en mode développement
+# Serve media files in development mode
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -24,7 +24,7 @@ from django.db.models.functions import Cast
 
 class TutorPageView(TemplateView):
     """
-    Affiche la page de chat du tuteur et fournit la liste des documents disponibles.
+    Displays the tutor chat page and provides the list of available documents.
     """
     template_name = "tutor/tutor.html"
 
@@ -41,7 +41,7 @@ class TutorPageView(TemplateView):
         if chat_session_id:
             try:
                 session = ChatSession.objects.select_related('document').get(id=chat_session_id)
-                # Si on reprend une session, on s'assure qu'elle est marquée comme "en cours"
+                # If resuming a session, ensure it is marked as "ongoing"
                 if resume_session_id and session.end_time:
                     session.end_time = None
                     session.save()
@@ -74,12 +74,12 @@ class TutorPageView(TemplateView):
             except ChatSession.DoesNotExist:
                 self.request.session.pop('chat_session_id', None)
                 context['documents'] = Document.objects.all().order_by('title')
-                # Charger les catégories pour l'arborescence si aucune session n'est en cours
+                # Load categories for the tree if no session is in progress
                 context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(
                     'children__children__documents'
                 ).order_by('order', 'name')
         else:
-            # Charger les catégories pour l'arborescence si aucune session n'est en cours
+            # Load categories for the tree if no session is in progress
             context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(
                 'children__children__documents'
             ).order_by('order', 'name')
@@ -87,7 +87,7 @@ class TutorPageView(TemplateView):
 
 class OpenAIAPIView(APIView):
     """
-    Vue de base qui initialise le client OpenAI.
+    Base view that initializes the OpenAI client.
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -95,21 +95,21 @@ class OpenAIAPIView(APIView):
 
 class StartSessionView(LoginRequiredMixin, View):
     """
-    Crée une nouvelle session de chat pour un document donné et redirige vers la page du tuteur.
+    Creates a new chat session for a given document and redirects to the tutor page.
     """
     def get(self, request, document_id):
         document = get_object_or_404(Document, pk=document_id)
         solution_doc = Document.objects.filter(solution_for=document).first()
 
-        # Préparer le contexte pour l'IA
+        # Prepare the context for the AI
         question_context = f"Exercice: {document.title}"
-        solution_context = "Aucun corrigé fourni."
+        solution_context = "No solution provided."
         if solution_doc and solution_doc.file:
-            # Idéalement, ici on extrairait le texte du PDF du corrigé.
-            # Pour l'instant, on se contente d'une information basique.
-            solution_context = f"Le corrigé de l'exercice '{solution_doc.title}' est disponible."
+            # Ideally, we would extract the text from the solution PDF here.
+            # For now, we'll stick to basic information.
+            solution_context = f"The solution for the exercise '{solution_doc.title}' is available."
 
-        # Créer une nouvelle session
+        # Create a new session
         chat_session = ChatSession.objects.create(
             student=request.user,
             document=document,
@@ -117,7 +117,7 @@ class StartSessionView(LoginRequiredMixin, View):
             solution_context=solution_context
         )
         
-        # Générer le message de bienvenue de l'IA
+        # Generate the AI's welcome message
         try:
             client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             welcome_prompt = {
@@ -132,12 +132,12 @@ class StartSessionView(LoginRequiredMixin, View):
             assistant_welcome_text = welcome_response.choices[0].message.content
             assistant_welcome_structured = [{"type": "text", "text": assistant_welcome_text}]
             
-            # Sauvegarder le premier message dans la base de données
+            # Save the first message to the database
             ChatMessage.objects.create(session=chat_session, role='assistant', content=assistant_welcome_structured)
         except Exception as e:
-            print(f"Erreur lors de la génération du message de bienvenue : {e}")
+            print(f"Error generating welcome message: {e}")
 
-        # Stocker l'ID de la session et le contexte dans la session de l'utilisateur
+        # Store the session ID and context in the user's session
         request.session['chat_session_id'] = chat_session.id
         request.session['exercise_context'] = {
             'question': chat_session.question_context,
@@ -147,13 +147,13 @@ class StartSessionView(LoginRequiredMixin, View):
 
 class TutorImageAnalysisView(OpenAIAPIView):
     """
-    Analyse une image de question mathématique au début de l'exercice.
+    Analyzes a math question image at the beginning of the exercise.
     """
     def post(self, request, *args, **kwargs):
         document_url = request.data.get('document_url')
         image_base64 = request.data.get('image')
         if not image_base64:
-            return Response({"error": "Aucune image fournie."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "No image provided."}, status=status.HTTP_400_BAD_REQUEST)
 
         document = Document.objects.filter(file=document_url.replace('/media/', '')).first()
 
@@ -178,7 +178,7 @@ class TutorImageAnalysisView(OpenAIAPIView):
             solution = exercise_data.get("solution")
 
             if not question or not solution:
-                raise ValueError("Extraction de la question/solution échouée.")
+                raise ValueError("Question/solution extraction failed.")
 
             chat_session = ChatSession.objects.create(
                 student=request.user,
@@ -202,7 +202,7 @@ class TutorImageAnalysisView(OpenAIAPIView):
             
             assistant_welcome_text = welcome_response.choices[0].message.content
             
-            # On formate le message pour qu'il corresponde au JSONField
+            # Format the message to match the JSONField
             assistant_welcome_structured = [{"type": "text", "text": assistant_welcome_text}]
             
             ChatMessage.objects.create(
@@ -215,13 +215,13 @@ class TutorImageAnalysisView(OpenAIAPIView):
             return Response({"initial_history": initial_history}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            print(f"Erreur lors de l'analyse d'image par OpenAI: {e}")
-            return Response({"error": "Une erreur est survenue lors de l'analyse de l'image."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"Error during OpenAI image analysis: {e}")
+            return Response({"error": "An error occurred while analyzing the image."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class BaseTutorAPIView(OpenAIAPIView):
     """
-    Classe de base pour les vues d'API du tuteur qui partagent une logique commune.
+    Base class for tutor API views that share common logic.
     """
     @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
@@ -230,17 +230,17 @@ class BaseTutorAPIView(OpenAIAPIView):
         self.client_messages = request.data.get("messages")
 
         if not all([self.chat_session_id, self.exercise_context, self.client_messages]):
-            return Response({"error": "La session est invalide ou les messages sont manquants."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Session is invalid or messages are missing."}, status=status.HTTP_400_BAD_REQUEST)
 
         self.chat_session = get_object_or_404(ChatSession, id=self.chat_session_id)
         return self.handle_logic(request, *args, **kwargs)
 
     def handle_logic(self, request, *args, **kwargs):
-        raise NotImplementedError("Les sous-classes doivent implémenter handle_logic.")
+        raise NotImplementedError("Subclasses must implement handle_logic.")
 
 
 class TutorInteractionView(BaseTutorAPIView):
-    """Gère une interaction normale avec le tuteur IA."""
+    """Handles a normal interaction with the AI tutor."""
     def handle_logic(self, request, *args, **kwargs):
         user_message_content = self.client_messages[-1]['content']
         ChatMessage.objects.create(session=self.chat_session, role='user', content=user_message_content)
@@ -263,18 +263,18 @@ class TutorInteractionView(BaseTutorAPIView):
         8.  Si l'élève semble avoir compris, demande-lui d'expliquer avec ses propres mots pour valider sa compréhension.
         """
         
-        # Logique de formatage de l'historique pour l'API
+        # Logic to format the history for the API
         processed_messages = []
         for msg in self.client_messages:
             new_msg = {'role': msg['role']}
-            # Si le contenu est une liste (avec potentiellement des images), on le garde tel quel.
+            # If the content is a list (potentially with images), keep it as is.
             if isinstance(msg['content'], list):
-                # Assurons-nous que le format est correct pour l'API
+                # Ensure the format is correct for the API
                 new_content = []
                 for part in msg['content']:
-                    # CORRECTION: Gérer le format envoyé par le frontend {type: 'image_url', url: '...'}
+                    # Handle the format sent by the frontend {type: 'image_url', url: '...'}
                     if part.get('type') == 'image_url' and 'url' in part:
-                        # On reconstruit la structure attendue par l'API OpenAI
+                        # Reconstruct the structure expected by the OpenAI API
                         new_content.append({'type': 'image_url', 'image_url': {'url': part['url']}})
                     elif part.get('type') == 'text':
                         new_content.append({'type': 'text', 'text': part['text']})
@@ -305,13 +305,13 @@ class TutorInteractionView(BaseTutorAPIView):
             return Response({"content": assistant_reply_structured}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            print(f"Erreur lors de l'appel à OpenAI: {e}")
-            return Response({"error": "Une erreur est survenue lors de la communication avec l'IA."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"Error calling OpenAI: {e}")
+            return Response({"error": "An error occurred while communicating with the AI."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class EndSessionView(APIView):
     """
-    Termine la session de tutorat en cours et nettoie la session de l'utilisateur.
+    Ends the current tutoring session and cleans up the user's session.
     """
     @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
@@ -321,7 +321,7 @@ class EndSessionView(APIView):
                 session = ChatSession.objects.get(id=chat_session_id, student=request.user)
                 if not session.end_time:
                     session.end_time = now()
-                    # Lancer la génération du résumé en arrière-plan
+                    # Start summary generation in the background
                     thread = threading.Thread(target=generate_and_save_session_summary, args=[session.id])
                     thread.start()
                     session.save()
@@ -332,13 +332,13 @@ class EndSessionView(APIView):
             request.session.pop('exercise_context', None)
             request.session.pop('hint_level', None)
         
-        # Voici la ligne corrigée :
+        # Corrected line:
         return Response({'redirect_url': reverse('dashboard:dashboard')}, status=status.HTTP_200_OK)
 
 
 class SaveWhiteboardView(APIView):
     """
-    Sauvegarde l'état actuel du tableau blanc pour une session donnée.
+    Saves the current state of the whiteboard for a given session.
     """
     @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
@@ -346,7 +346,7 @@ class SaveWhiteboardView(APIView):
         whiteboard_data = request.data.get('whiteboard_state')
 
         if not chat_session_id or whiteboard_data is None:
-            return Response({"error": "Données manquantes."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Missing data."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             session = ChatSession.objects.get(id=chat_session_id)
@@ -354,6 +354,6 @@ class SaveWhiteboardView(APIView):
             session.save(update_fields=['whiteboard_state'])
             return Response({"success": True}, status=status.HTTP_200_OK)
         except ChatSession.DoesNotExist:
-            return Response({"error": "Session non trouvée."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

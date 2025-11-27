@@ -5,15 +5,15 @@ from django.urls import reverse
 
 class HomeView(TemplateView):
     """
-    Affiche la page d'accueil pour les visiteurs non connectés.
-    Si un utilisateur est déjà connecté, il est redirigé vers son tableau de bord.
+    Displays the homepage for unauthenticated visitors.
+    If a user is already logged in, they are redirected to their dashboard.
     """
     template_name = "core/home.html"
 
     def get(self, request, *args, **kwargs):
-        # Si l'utilisateur est connecté, on le redirige vers son tableau de bord.
+        # If the user is authenticated, redirect to their dashboard.
         if request.user.is_authenticated:
             return redirect(reverse('dashboard:dashboard'))
         
-        # Sinon, on affiche la page d'accueil normale pour les visiteurs.
+        # Otherwise, show the normal homepage for visitors.
         return super().get(request, *args, **kwargs)
