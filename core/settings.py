@@ -53,10 +53,10 @@ INSTALLED_APPS = [
     "corsheaders",
     # Project applications
     "core",
-    "dashboard.apps.DashboardConfig",
-    "tutor.apps.TutorConfig",
-    "users.apps.UsersConfig",
-    "documents.apps.DocumentsConfig",
+    "dashboard",
+    "tutor",
+    "users",
+    "documents",
 ]
 
 MIDDLEWARE = [
