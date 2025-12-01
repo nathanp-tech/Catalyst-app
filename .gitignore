@@ -10,9 +10,10 @@
 # Environnement Virtuel Python
 # Le dossier qui contient toutes les bibliothèques installées
 # ===================================================================
-catalyst/
 env/
-.catalyst/
+catalyst/
+venv/
+.venv/
 
 
 # ===================================================================
@@ -53,6 +54,14 @@ htmlcov/
 
 
 # ===================================================================
+# Fichiers de build et de distribution
+# ===================================================================
+build/
+dist/
+*.egg-info/
+
+
+# ===================================================================
 # Fichiers système d'exploitation (macOS, Windows, Linux)
 # Fichiers "fantômes" créés par l'OS
 # ===================================================================
@@ -72,9 +81,7 @@ logs/
 # Environnement Conda (Anaconda/Miniconda)
 # Remplacez "nom_env" par le nom réel de votre dossier d'environnement
 # ===================================================================
-/nom_env/
 .conda/
-# Dossier de configuration Anaconda
 .anaconda/
 
 
