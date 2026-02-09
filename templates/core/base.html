@@ -127,6 +127,7 @@
                     <span class="nav-username"><i class="fas fa-user-circle"></i> Bonjour, {{ user.username }}</span>
                     {% if user.is_staff %}
                         <a href="{% url 'admin:index' %}">Admin</a>
+                        <a href="{% url 'settings' %}">Paramètres</a>
                     {% endif %}
                     <a href="{% url 'dashboard:dashboard' %}">Tableau de Bord</a>
                     <a href="{% url 'logout' %}">Déconnexion</a>

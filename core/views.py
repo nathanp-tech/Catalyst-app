@@ -1,6 +1,8 @@
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, UpdateView
 from django.shortcuts import redirect
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from .models import AppConfig
 
 
 class HomeView(TemplateView):
@@ -17,3 +19,16 @@ class HomeView(TemplateView):
         
         # Otherwise, show the normal homepage for visitors.
         return super().get(request, *args, **kwargs)
+
+class SettingsView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    model = AppConfig
+    fields = ['active_model']
+    template_name = "core/settings.html"
+    success_url = reverse_lazy('settings')
+
+    def test_func(self):
+        return self.request.user.is_staff
+
+    def get_object(self, queryset=None):
+        obj, _ = AppConfig.objects.get_or_create(pk=1)
+        return obj

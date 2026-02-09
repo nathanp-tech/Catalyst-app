@@ -33,6 +33,35 @@
 
         /* Allows the toolbar to wrap if it's too long */
         .toolbar { flex-wrap: wrap; }
+
+        /* Styles pour le bouton d'ajout de photo */
+        #attachPhotoBtn {
+            background-color: #ffffff;
+            color: #555;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            align-self: center;
+        }
+
+        #attachPhotoBtn:hover {
+            background-color: #f0f2f5;
+            color: #007bff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        #attachPhotoBtn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
@@ -111,6 +140,11 @@
                         <button id="restoreLastBtn" class="tool" title="Restaurer le dernier envoi" style="background-color: #28a745; color: white; border-color: #28a745;">
                             <i class="fas fa-history"></i>
                         </button>
+                        {% if user.is_staff %}
+                        <a href="{% url 'settings' %}" class="tool" title="Paramètres" style="display: flex; align-items: center; justify-content: center; text-decoration: none; color: #555;">
+                            <i class="fas fa-cog"></i>
+                        </a>
+                        {% endif %}
                     </div>
                     
                     <div id="canvas-container">
@@ -120,10 +154,17 @@
     
                 <div class="input-area">
                     <textarea id="textInput" placeholder="Écris ta réponse ou pose une question..."></textarea>
-                    <button id="sendBtn" disabled>
-                        <span id="sendBtnText">Envoyer</span>
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
+                    <div style="display: flex; flex-direction: column; gap: 5px; margin-left: 10px; justify-content: flex-end;">
+                        <div id="photoPreviewContainer"></div>
+                        <input type="file" id="photoInput" accept="image/*" style="display: none;">
+                        <button id="attachPhotoBtn" type="button" title="Joindre une photo">
+                            <i class="fas fa-camera"></i>
+                        </button>
+                        <button id="sendBtn" disabled>
+                            <span id="sendBtnText">Envoyer</span>
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </main>

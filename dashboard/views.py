@@ -16,6 +16,8 @@ from openai import OpenAI
 from collections import defaultdict
 from tutor.models import ChatSession, ChatMessage
 from .models import GroupConfiguration
+from core.models import AppConfig
+from core.ai_utils import generate_ai_response
 
 
 def is_user_in_group(user, group_name):
@@ -625,9 +627,10 @@ class CreateStudentGroupsView(LoginRequiredMixin, View):
         api_messages = [{"role": "system", "content": system_prompt}] + messages
 
         try:
-            client = OpenAI()
-            response = client.chat.completions.create(model="gpt-4o", messages=api_messages)
-            ai_response = response.choices[0].message.content
+            ai_response = generate_ai_response(
+                messages=api_messages,
+                model_name=AppConfig.get_active_model()
+            )
             return JsonResponse({'reply': ai_response})
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)

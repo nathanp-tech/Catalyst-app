@@ -21,6 +21,8 @@ from documents.models import Document
 from dashboard.services import generate_and_save_session_summary
 from documents.models import Category
 from django.db.models.functions import Cast
+from core.models import AppConfig
+from core.ai_utils import generate_ai_response
 
 class TutorPageView(TemplateView):
     """
@@ -119,17 +121,15 @@ class StartSessionView(LoginRequiredMixin, View):
         
         # Generate the AI's welcome message
         try:
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             welcome_prompt = {
                 "role": "system",
                 "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit être un message d'accueil court et motivant pour l'inviter à commencer. Tu tutoies l'élève. Ne mentionne ni la question ni la solution. Réponds uniquement en français."
             }
-            welcome_response = client.chat.completions.create(
-                model="gpt-4o",
+            assistant_welcome_text = generate_ai_response(
                 messages=[welcome_prompt, {"role": "user", "content": "Commence la conversation."}],
+                model_name=AppConfig.get_active_model(),
                 temperature=0.5
             )
-            assistant_welcome_text = welcome_response.choices[0].message.content
             assistant_welcome_structured = [{"type": "text", "text": assistant_welcome_text}]
             
             # Save the first message to the database
@@ -167,13 +167,13 @@ class TutorImageAnalysisView(OpenAIAPIView):
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
             ]
             
-            extraction_response = self.client.chat.completions.create(
-                model="gpt-4o",
+            extraction_response_text = generate_ai_response(
                 messages=[extraction_prompt, {"role": "user", "content": user_content}],
+                model_name=AppConfig.get_active_model(),
                 response_format={"type": "json_object"}
             )
             
-            exercise_data = json.loads(extraction_response.choices[0].message.content)
+            exercise_data = json.loads(extraction_response_text)
             question = exercise_data.get("question")
             solution = exercise_data.get("solution")
 
@@ -194,14 +194,11 @@ class TutorImageAnalysisView(OpenAIAPIView):
                 "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit être un message d'accueil court et motivant pour l'inviter à commencer. Tu tutoies l'élève. Ne mentionne ni la question ni la solution. Réponds uniquement en français."
             }
             
-            welcome_response = self.client.chat.completions.create(
-                model="gpt-4o",
+            assistant_welcome_text = generate_ai_response(
                 messages=[welcome_prompt, {"role": "user", "content": "Commence la conversation."}],
+                model_name=AppConfig.get_active_model(),
                 temperature=0.5
             )
-            
-            assistant_welcome_text = welcome_response.choices[0].message.content
-            
             # Format the message to match the JSONField
             assistant_welcome_structured = [{"type": "text", "text": assistant_welcome_text}]
             
@@ -247,7 +244,7 @@ class TutorInteractionView(BaseTutorAPIView):
         request.session['hint_level'] = 1
 
         system_prompt = f"""
-        Tu es un tuteur de mathématiques bienveillant et Socratique. Ton objectif est de guider l'élève sans jamais lui donner la réponse. Toutes tes réponses doivent être en français.
+        Tu es un tuteur de mathématiques bienveillant et Socratique. Ton objectif est de guider l'élève sans jamais lui donner la réponse ni les formules directement. Toutes tes réponses doivent être en français.
         
         Voici le contexte de l'exercice :
         - La question est : "{self.exercise_context['question']}"
@@ -256,11 +253,11 @@ class TutorInteractionView(BaseTutorAPIView):
         Tes règles d'or sont :
         1.  **Ne jamais donner la réponse directe** ou la prochaine étape.
         2.  **Analyser la réponse de l'élève** (image et/ou texte) pour identifier les erreurs ou les bonnes idées.
-        3.  **Si la réponse est incorrecte ou hors-sujet, corrige gentiment mais directement.** Ne te contente pas de demander "en quoi cela aide ?". Compare ce que l'élève a fait avec ce que l'énoncé demande. Par exemple, si l'élève dessine un polygone irrégulier pour un exercice sur les polygones réguliers, dis : "C'est un bon début de dessiner un polygone ! L'énoncé nous demande un polygone *régulier*. Te souviens-tu de ce qui le rend 'régulier' ?". Sois un guide actif, pas seulement un questionneur passif.
+        3.  **Si la réponse est incorrecte, ne donne pas la correction tout de suite.** Guide l'élève pour qu'il retrouve la règle ou le concept lui-même. Par exemple, si l'élève oublie que la somme des angles d'un triangle est 180°, demande-lui : "Te souviens-tu de la somme des angles d'un triangle ?" au lieu de lui donner la valeur.
         4.  **Donner des indices subtils** si l'élève est bloqué, en posant des questions ouvertes.
-        6.  **Utiliser le tutoiement** et un ton amical.
-        7.  Garder tes réponses concises et focalisées sur une seule idée à la fois.
-        8.  Si l'élève semble avoir compris, demande-lui d'expliquer avec ses propres mots pour valider sa compréhension.
+        5.  **Utiliser le tutoiement** et un ton amical.
+        6.  Garder tes réponses concises et focalisées sur une seule idée à la fois.
+        7.  Si l'élève semble avoir compris, demande-lui d'expliquer avec ses propres mots pour valider sa compréhension.
         """
         
         # Logic to format the history for the API
@@ -287,14 +284,12 @@ class TutorInteractionView(BaseTutorAPIView):
         api_messages = [{"role": "system", "content": system_prompt}] + processed_messages
 
         try:
-            completion = self.client.chat.completions.create(
-                model="gpt-4o",
+            assistant_reply_text = generate_ai_response(
                 messages=api_messages,
-                temperature=0.4,
-                max_tokens=1000
+                model_name=AppConfig.get_active_model(),
+                temperature=0.4
             )
 
-            assistant_reply_text = completion.choices[0].message.content
             assistant_reply_structured = [{"type": "text", "text": assistant_reply_text}]
             
             ChatMessage.objects.create(

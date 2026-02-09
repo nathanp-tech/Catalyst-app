@@ -7,6 +7,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatbox = document.getElementById('chatbox');
     const textInput = document.getElementById('textInput');
     const sendBtn = document.getElementById('sendBtn');
+    const attachPhotoBtn = document.getElementById('attachPhotoBtn');
+    const photoInput = document.getElementById('photoInput');
+    const photoPreviewContainer = document.getElementById('photoPreviewContainer');
     const canvasContainer = document.getElementById('canvas-container');
     const penTool = document.getElementById('penTool');
     const eraserTool = document.getElementById('eraserTool');
@@ -44,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- STATE VARIABLES ---
     let chatHistory = [];
     let uploadedImage = null;
+    let attachedImage = null;
     let fabricCanvas = null;
     const whiteboardState = {
         color: '#000000',
@@ -437,8 +441,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function sendToTutor() {
         const preparedImage = prepareImageForAI();
         const textComment = textInput.value.trim();
-        if (!preparedImage && !textComment) {
-            alert("Veuillez dessiner une réponse ou écrire un commentaire.");
+        if (!preparedImage && !textComment && !attachedImage) {
+            alert("Veuillez dessiner une réponse, écrire un commentaire ou joindre une photo.");
             return; // Exit if nothing to send
         }
 
@@ -449,12 +453,18 @@ document.addEventListener('DOMContentLoaded', () => {
         let userMessageContent = [];
         if (textComment) userMessageContent.push({ type: 'text', text: textComment });
         if (preparedImage) userMessageContent.push({ type: 'image_url', url: preparedImage });
+        if (attachedImage) userMessageContent.push({ type: 'image_url', url: attachedImage });
 
         chatHistory.push({ role: 'user', content: userMessageContent });
         renderChatHistory();
         displayLoadingIndicator();
         textInput.value = '';
         clearCanvas();
+
+        // Clear attached image
+        attachedImage = null;
+        if (photoInput) photoInput.value = '';
+        if (photoPreviewContainer) photoPreviewContainer.innerHTML = '';
 
         // Save whiteboard state right after sending
         await saveWhiteboardState();
@@ -540,6 +550,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (sendBtn) sendBtn.addEventListener('click', sendToTutor);
         
+        if (attachPhotoBtn && photoInput) {
+            attachPhotoBtn.addEventListener('click', () => photoInput.click());
+            photoInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    attachedImage = event.target.result;
+                    if (photoPreviewContainer) {
+                        photoPreviewContainer.innerHTML = `
+                            <div style="position: relative; display: inline-block; margin-bottom: 10px;">
+                                <img src="${attachedImage}" style="max-height: 100px; border-radius: 8px; border: 1px solid #ddd;">
+                                <button id="removePhotoBtn" style="position: absolute; top: -8px; right: -8px; background: #ff4444; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold;">&times;</button>
+                            </div>`;
+                        document.getElementById('removePhotoBtn').addEventListener('click', () => {
+                            attachedImage = null;
+                            photoInput.value = '';
+                            photoPreviewContainer.innerHTML = '';
+                        });
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
         if (penTool) penTool.addEventListener('click', () => setTool(TOOLS.PEN));
         if (eraserTool) eraserTool.addEventListener('click', () => setTool(TOOLS.ERASER));
         if (lineTool) lineTool.addEventListener('click', () => setTool(TOOLS.LINE));

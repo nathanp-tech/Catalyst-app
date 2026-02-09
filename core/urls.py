@@ -19,10 +19,11 @@ from django.contrib import admin
 from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
-from .views import HomeView
+from .views import HomeView, SettingsView
 
 urlpatterns = [
     path("", HomeView.as_view(), name="home"),
+    path("settings/", SettingsView.as_view(), name="settings"),
     # path("api/", APIRootView.as_view(), name="api-root"), # Uncomment if you need an API root
     path("admin/", admin.site.urls),
     path("dashboard/", include(("dashboard.urls", "dashboard"), namespace="dashboard")), # Dashboard web pages

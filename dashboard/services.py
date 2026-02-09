@@ -3,6 +3,8 @@
 import json
 from openai import OpenAI
 from tutor.models import ChatSession
+from core.models import AppConfig
+from core.ai_utils import generate_ai_response
 
 def generate_and_save_session_summary(session_id):
     """
@@ -44,9 +46,12 @@ def generate_and_save_session_summary(session_id):
         2. "summary_text" : un court paragraphe (3-4 phrases) résumant les échanges, les difficultés de l'élève et son évolution.
         """
 
-        client = OpenAI()
-        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "system", "content": prompt}], response_format={"type": "json_object"})
-        summary_data = json.loads(response.choices[0].message.content)
+        response_text = generate_ai_response(
+            messages=[{"role": "user", "content": prompt}],
+            model_name=AppConfig.get_active_model(),
+            response_format={"type": "json_object"}
+        )
+        summary_data = json.loads(response_text)
         session.summary_data = summary_data
         session.save()
 
