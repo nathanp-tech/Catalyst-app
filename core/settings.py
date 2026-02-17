@@ -30,14 +30,15 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-1tcszmj%u1&s-#28er1o4
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Set DEBUG to False in production
-DEBUG = 'RENDER' not in os.environ
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '172.20.10.9']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '172.20.10.9', 'nathanptech.pythonanywhere.com']
 
-# Add Render's hostname to allowed hosts
-RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-if RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+# Add external hostnames from environment variable (comma separated)
+EXTERNAL_HOSTS = os.environ.get('ALLOWED_HOSTS')
+if EXTERNAL_HOSTS:
+    ALLOWED_HOSTS.extend(EXTERNAL_HOSTS.split(','))
+
 
 # Application definition
 
@@ -155,6 +156,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # CORS configuration
 # For development, allow everything. In production, this will be restricted.
 CORS_ALLOW_ALL_ORIGINS = True
+
+# CSRF Configuration for production
+CSRF_TRUSTED_ORIGINS = ['https://nathanptech.pythonanywhere.com']
 
 # Media files configuration (uploads)
 MEDIA_URL = '/media/'
