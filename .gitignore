@@ -87,3 +87,4 @@ logs/
 
 # Fichiers statiques et medias
 staticfiles/
+media/
