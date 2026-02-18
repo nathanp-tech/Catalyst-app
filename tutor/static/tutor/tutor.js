@@ -30,8 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomOutBtn = document.getElementById('zoomOutBtn');
     const zoomResetBtn = document.getElementById('zoomResetBtn');
     const questionZoomPercent = document.getElementById('questionZoomPercent');
-    const leftPanel = document.querySelector('.left-panel');
-    const whiteboardWorkspace = document.querySelector('.whiteboard-workspace');
+    const whiteboardWorkspace = document.querySelector('.workspace-panel') || document.querySelector('.whiteboard-workspace');
     
     // --- CONSTANTS ---
     const TOOLS = {
@@ -227,10 +226,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Manage active state of buttons
         document.querySelectorAll('.toolbar .tool').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.toolbar .tool-btn').forEach(t => t.classList.remove('active')); // Support new class
         const activeToolBtn = document.getElementById(`${tool}Tool`);
         if (activeToolBtn) activeToolBtn.classList.add('active');
         if (tool === 'select') selectTool.classList.add('active');
 
+        if (!thicknessIcon) return;
         thicknessIcon.className = tool === 'pen' ? 'fas fa-pen-nib' : 'fas fa-eraser';
         
         if (tool === TOOLS.PEN) {
@@ -282,8 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function toggleFullscreen() {
         if (!document.fullscreenElement) {
-            // Move the question card into the whiteboard container before fullscreen
-            whiteboardWorkspace.appendChild(questionCard);
             if (whiteboardWorkspace.requestFullscreen) {
                 whiteboardWorkspace.requestFullscreen();
             } else if (whiteboardWorkspace.webkitRequestFullscreen) { /* Safari */
@@ -303,8 +302,6 @@ document.addEventListener('DOMContentLoaded', () => {
             icon.className = 'fas fa-compress';
             questionCard.classList.add('in-fullscreen');
         } else {
-            // Exited fullscreen, move card back to its original place
-            leftPanel.insertBefore(questionCard, leftPanel.firstChild);
             questionCard.classList.remove('in-fullscreen');
             icon.className = 'fas fa-expand';
         }
