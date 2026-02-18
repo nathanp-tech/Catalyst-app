@@ -59,11 +59,9 @@ class DocumentBrowseView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         # We sort documents by their title using a natural sort
         # by extracting the numeric part of the title.
-        documents_sorted = Document.objects.annotate(
-            numeric_part=Cast(models.functions.Substr('title', 3), models.IntegerField())
-        ).order_by('numeric_part')
+        documents_sorted = Document.objects.all().order_by('title')
         
-        context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(models.Prefetch('children__children__documents', queryset=documents_sorted, to_attr='sorted_documents'), 'children__children__documents__solution').order_by('order', 'name')
+        context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(models.Prefetch('children__documents', queryset=documents_sorted, to_attr='sorted_documents'), 'children__documents__solution').order_by('order', 'name')
         return context
 
 class DocumentUpdateFileView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
