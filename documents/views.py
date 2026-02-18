@@ -77,3 +77,27 @@ class DocumentUpdateFileView(LoginRequiredMixin, UserPassesTestMixin, UpdateView
     def form_valid(self, form):
         form.instance.uploaded_by = self.request.user
         return super().form_valid(form)
+
+class DocumentCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
+    """
+    Permet d'uploader un nouveau document en dehors du curriculum officiel.
+    Il est automatiquement classé dans 'Documents Complémentaires' > 'Général'.
+    """
+    model = Document
+    fields = ['title', 'file']
+    template_name = 'documents/document_create.html'
+    success_url = reverse_lazy('documents:browse')
+
+    def test_func(self):
+        return is_teacher(self.request.user)
+
+    def form_valid(self, form):
+        form.instance.uploaded_by = self.request.user
+        
+        # Création ou récupération de la structure de catégorie "Hors Programme"
+        # On utilise un ordre élevé (999) pour qu'elle s'affiche à la fin de la liste
+        custom_root, _ = Category.objects.get_or_create(name="Documents Complémentaires", defaults={'parent': None, 'order': 999})
+        custom_sub, _ = Category.objects.get_or_create(name="Général", parent=custom_root, defaults={'order': 0})
+        
+        form.instance.category = custom_sub
+        return super().form_valid(form)

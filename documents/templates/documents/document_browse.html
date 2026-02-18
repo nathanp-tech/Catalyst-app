@@ -84,9 +84,14 @@
 {% endblock %}
 
 {% block content %}
-<div class="dashboard-header">
-    <h1>Gestion des Documents</h1>
-    <p>Naviguez dans l'arborescence et ajoutez les fichiers PDF manquants.</p>
+<div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h1>Gestion des Documents</h1>
+        <p>Naviguez dans l'arborescence et ajoutez les fichiers PDF manquants.</p>
+    </div>
+    <a href="{% url 'documents:document-create' %}" class="action-btn" style="background-color: var(--primary-color); color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+        <i class="fas fa-plus"></i> Ajouter un document hors-programme
+    </a>
 </div>
 
 <div class="browser-container">
