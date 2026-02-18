@@ -1,0 +1,390 @@
+{% extends "core/base.html" %}
+{% load static %}
+{% load l10n %}
+
+{% block title %}Résultats des Questionnaires{% endblock %}
+
+{% block head_extra %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .analytics-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        .chart-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+        }
+        .chart-card h3 {
+            margin-top: 0;
+            color: var(--header-color);
+        }
+        .responses-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--card-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+        }
+        .responses-table th, .responses-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .responses-table th { background-color: #f8f9fa; font-weight: 600; }
+        .score-badge {
+            display: inline-block;
+            min-width: 30px;
+            padding: 0 5px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: white;
+        }
+        .score-low { background-color: #e74c3c; }
+        .score-mid { background-color: #f1c40f; }
+        .score-high { background-color: #28a745; }
+
+        /* --- Nouveaux Styles --- */
+        .tabs {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .tab-btn {
+            padding: 1rem 0;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: color 0.3s, border-color 0.3s;
+        }
+        .tab-btn:hover { color: var(--primary-color); }
+        .tab-btn.active {
+            border-bottom-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        .tab-content { display: none; animation: fadeIn 0.4s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Barres de distribution */
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 1.5rem;
+        }
+        .question-item { margin-bottom: 1.5rem; }
+        .question-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        .avg-score { font-weight: bold; color: var(--header-color); }
+        .distribution-bar {
+            display: flex;
+            height: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            background-color: #eee;
+        }
+        .dist-segment { height: 100%; }
+        /* Couleurs Likert */
+        .bg-1 { background-color: #e74c3c; } /* Rouge */
+        .bg-2 { background-color: #e67e22; } /* Orange */
+        .bg-3 { background-color: #f1c40f; } /* Jaune */
+        .bg-4 { background-color: #3498db; } /* Bleu */
+        .bg-5 { background-color: #2ecc71; } /* Vert */
+        
+        .legend-container { display: flex; gap: 1rem; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; }
+        .legend-item { display: flex; align-items: center; gap: 0.3rem; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        /* --- Styles pour le tableau détaillé (Accordéon) --- */
+        .expand-btn { background: none; border: none; cursor: pointer; color: var(--primary-color); transition: transform 0.3s; font-size: 1rem; padding: 5px; }
+        .expand-btn.rotated { transform: rotate(180deg); }
+        
+        .details-row { background-color: #f8f9fa; }
+        .details-wrapper { padding: 1.5rem; border-top: 1px solid var(--border-color); box-shadow: inset 0 2px 4px rgba(0,0,0,0.03); }
+        
+        .details-grid-inner { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; }
+        
+        .detail-card { background: white; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .detail-card h5 { margin-top: 0; margin-bottom: 0.75rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid var(--primary-light); padding-bottom: 0.5rem; }
+        
+        .detail-line { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-color); align-items: center; }
+        .detail-line:last-child { margin-bottom: 0; }
+        .detail-line strong { color: var(--header-color); background: #f1f3f5; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
+        
+        .comments-detail { background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid #e0e0e0; border-left: 4px solid var(--secondary-color); }
+        .comments-detail h5 { margin-top: 0; color: var(--header-color); margin-bottom: 1rem; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        
+        .comment-item { margin-bottom: 1rem; }
+        .comment-item:last-child { margin-bottom: 0; }
+        .comment-label { display: block; font-weight: 600; color: var(--text-muted); font-size: 0.9rem; margin-bottom: 0.3rem; }
+        .comment-text { margin: 0; background: #f8f9fa; padding: 0.8rem; border-radius: 6px; font-style: italic; color: #495057; line-height: 1.5; }
+
+        /* Ajustement tableau principal */
+        .responses-table td { vertical-align: middle; }
+        .responses-table tr.summary-row:hover { background-color: #f1f3f5; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1><i class="fas fa-chart-pie"></i> Analyse des Retours Élèves</h1>
+    <p>Vue d'ensemble du ressenti de la classe.</p>
+</div>
+
+<div class="tabs">
+    <button class="tab-btn active" onclick="openTab(event, 'overview')">Vue d'ensemble</button>
+    <button class="tab-btn" onclick="openTab(event, 'details')">Analyse Détaillée</button>
+    <button class="tab-btn" onclick="openTab(event, 'responses')">Réponses Individuelles</button>
+</div>
+
+<!-- TAB 1: VUE D'ENSEMBLE -->
+<div id="overview" class="tab-content active">
+    <div class="analytics-container">
+        <div class="chart-card">
+            <h3>Moyennes par Dimension</h3>
+            <div style="height: 300px; display: flex; justify-content: center;">
+                <canvas id="surveyRadarChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-card">
+            <h3>Derniers commentaires (Qualitatif)</h3>
+            <div style="max-height: 300px; overflow-y: auto; padding-right: 10px;">
+                {% for response in responses %}
+                    {% if response.open_difficulty or response.open_confusion %}
+                    <div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #eee;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <strong>{{ response.student.username }}</strong>
+                            <small style="color: #999;">{{ response.created_at|date:"d/m" }}</small>
+                        </div>
+                        {% if response.open_difficulty %}
+                        <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem;">
+                            <span style="color: #e74c3c; font-weight: 600;">Difficile :</span> {{ response.open_difficulty }}
+                        </p>
+                        {% endif %}
+                        {% if response.open_confusion %}
+                        <p style="margin: 0; font-size: 0.9rem;">
+                            <span style="color: #f39c12; font-weight: 600;">Confusion :</span> {{ response.open_confusion }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                {% empty %}
+                    <p style="color: var(--text-muted); font-style: italic;">Aucun commentaire qualitatif pour le moment.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TAB 2: ANALYSE DÉTAILLÉE -->
+<div id="details" class="tab-content">
+    <div class="legend-container">
+        <span class="legend-item"><span class="legend-dot bg-1"></span> 1 (Pas du tout)</span>
+        <span class="legend-item"><span class="legend-dot bg-2"></span> 2</span>
+        <span class="legend-item"><span class="legend-dot bg-3"></span> 3 (Moyennement)</span>
+        <span class="legend-item"><span class="legend-dot bg-4"></span> 4</span>
+        <span class="legend-item"><span class="legend-dot bg-5"></span> 5 (Tout à fait)</span>
+    </div>
+
+    <div class="details-grid">
+        {% for dim in detailed_stats %}
+        <div class="chart-card">
+            <h3>{{ dim.title }}</h3>
+            {% for q in dim.questions %}
+            <div class="question-item">
+                <div class="question-header">
+                    <span>{{ q.label }}</span>
+                    <span class="avg-score">{{ q.average }}/5</span>
+                </div>
+                {% localize off %}
+                <div class="distribution-bar" title="Distribution: {{ q.distribution }}">
+                    <div class="dist-segment bg-1" style="width: {{ q.percentages.0|stringformat:'.2f' }}%;"></div>
+                    <div class="dist-segment bg-2" style="width: {{ q.percentages.1|stringformat:'.2f' }}%;"></div>
+                    <div class="dist-segment bg-3" style="width: {{ q.percentages.2|stringformat:'.2f' }}%;"></div>
+                    <div class="dist-segment bg-4" style="width: {{ q.percentages.3|stringformat:'.2f' }}%;"></div>
+                    <div class="dist-segment bg-5" style="width: {{ q.percentages.4|stringformat:'.2f' }}%;"></div>
+                </div>
+                {% endlocalize %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- TAB 3: RÉPONSES INDIVIDUELLES -->
+<div id="responses" class="tab-content">
+    <table class="responses-table">
+        <thead>
+            <tr>
+                <th>Élève</th>
+                <th>Date</th>
+                <th>Utilité</th>
+                <th>Facilité</th>
+                <th>Compétence</th>
+                <th>Relation</th>
+                <th style="width: 50px; text-align: center;">Détails</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in responses %}
+            <tr class="summary-row">
+                <td>{{ r.student.username }}</td>
+                <td>{{ r.created_at|date:"d/m/Y" }}</td>
+                <td><span class="score-badge {% if r.score_utility < 3 %}score-low{% elif r.score_utility >= 4 %}score-high{% else %}score-mid{% endif %}">{{ r.score_utility|floatformat:1 }}</span></td>
+                <td><span class="score-badge {% if r.score_ease < 3 %}score-low{% elif r.score_ease >= 4 %}score-high{% else %}score-mid{% endif %}">{{ r.score_ease|floatformat:1 }}</span></td>
+                <td><span class="score-badge {% if r.score_competence < 3 %}score-low{% elif r.score_competence >= 4 %}score-high{% else %}score-mid{% endif %}">{{ r.score_competence|floatformat:1 }}</span></td>
+                <td><span class="score-badge {% if r.score_relation < 3 %}score-low{% elif r.score_relation >= 4 %}score-high{% else %}score-mid{% endif %}">{{ r.score_relation|floatformat:1 }}</span></td>
+                <td style="text-align: center;">
+                    <button class="expand-btn" onclick="toggleDetails('details-{{ r.id }}', this)" title="Voir le détail">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </td>
+            </tr>
+            <tr id="details-{{ r.id }}" class="details-row" style="display: none;">
+                <td colspan="7" style="padding: 0;">
+                    <div class="details-wrapper">
+                        <div class="details-grid-inner">
+                            <!-- Dimension 1 -->
+                            <div class="detail-card">
+                                <h5><i class="fas fa-tools"></i> Utilité Perçue</h5>
+                                <div class="detail-line"><span>Aide erreurs</span> <strong>{{ r.utility_errors }}/5</strong></div>
+                                <div class="detail-line"><span>Indices utiles</span> <strong>{{ r.utility_hints }}/5</strong></div>
+                                <div class="detail-line"><span>Correction auto.</span> <strong>{{ r.utility_correction }}/5</strong></div>
+                                <div class="detail-line"><span>Compréhension</span> <strong>{{ r.utility_understanding }}/5</strong></div>
+                            </div>
+                            <!-- Dimension 2 -->
+                            <div class="detail-card">
+                                <h5><i class="fas fa-mouse-pointer"></i> Facilité d'Usage</h5>
+                                <div class="detail-line"><span>Facilité questions</span> <strong>{{ r.ease_asking }}/5</strong></div>
+                                <div class="detail-line"><span>Savoir quoi demander</span> <strong>{{ r.ease_knowing }}/5</strong></div>
+                                <div class="detail-line"><span>Compréhension IA</span> <strong>{{ r.ease_understanding }}/5</strong></div>
+                                <div class="detail-line"><span>Reformulation (Négatif)</span> <strong>{{ r.ease_reformulation }}/5</strong></div>
+                            </div>
+                            <!-- Dimension 3 -->
+                            <div class="detail-card">
+                                <h5><i class="fas fa-brain"></i> Compétence</h5>
+                                <div class="detail-line"><span>Capacité</span> <strong>{{ r.competence_capability }}/5</strong></div>
+                                <div class="detail-line"><span>Confiance</span> <strong>{{ r.competence_confidence }}/5</strong></div>
+                                <div class="detail-line"><span>Préférence IA</span> <strong>{{ r.competence_preference }}/5</strong></div>
+                                <div class="detail-line"><span>Nouvelles façons</span> <strong>{{ r.competence_new_ways }}/5</strong></div>
+                            </div>
+                            <!-- Dimension 4 -->
+                            <div class="detail-card">
+                                <h5><i class="fas fa-handshake"></i> Relation</h5>
+                                <div class="detail-line"><span>Posture tuteur</span> <strong>{{ r.relation_tutor }}/5</strong></div>
+                                <div class="detail-line"><span>Confiance conseils</span> <strong>{{ r.relation_trust }}/5</strong></div>
+                                <div class="detail-line"><span>Intérêt cours</span> <strong>{{ r.relation_interest }}/5</strong></div>
+                            </div>
+                        </div>
+                        
+                        {% if r.open_difficulty or r.open_confusion %}
+                        <div class="comments-detail">
+                            <h5><i class="fas fa-comment-dots"></i> Commentaires Qualitatifs</h5>
+                            {% if r.open_difficulty %}
+                            <div class="comment-item">
+                                <span class="comment-label"><i class="fas fa-exclamation-circle" style="color: #e74c3c;"></i> Difficultés rencontrées :</span>
+                                <p class="comment-text">"{{ r.open_difficulty }}"</p>
+                            </div>
+                            {% endif %}
+                            {% if r.open_confusion %}
+                            <div class="comment-item">
+                                <span class="comment-label"><i class="fas fa-question-circle" style="color: #f39c12;"></i> Moments de confusion :</span>
+                                <p class="comment-text">"{{ r.open_confusion }}"</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">Aucune réponse enregistrée pour le moment.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // Gestion des onglets
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].className = tabcontent[i].className.replace(" active", "");
+        }
+        tablinks = document.getElementsByClassName("tab-btn");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+        document.getElementById(tabName).className += " active";
+        evt.currentTarget.className += " active";
+    }
+
+    // Gestion de l'accordéon pour les détails
+    function toggleDetails(rowId, btn) {
+        const row = document.getElementById(rowId);
+        if (row.style.display === 'none') {
+            row.style.display = 'table-row';
+            btn.classList.add('rotated');
+        } else {
+            row.style.display = 'none';
+            btn.classList.remove('rotated');
+        }
+    }
+
+    // Chart.js Radar
+    const ctx = document.getElementById('surveyRadarChart').getContext('2d');
+    const data = JSON.parse('{{ chart_data_json|safe }}');
+    
+    new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: data.labels,
+            datasets: [{
+                label: 'Moyenne Classe',
+                data: data.data,
+                backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                borderColor: 'rgba(52, 152, 219, 1)',
+                pointBackgroundColor: 'rgba(52, 152, 219, 1)',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    angleLines: { display: true },
+                    suggestedMin: 0,
+                    suggestedMax: 5,
+                    ticks: { stepSize: 1, backdropColor: 'transparent' },
+                    pointLabels: { font: { size: 12, weight: 'bold' } }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

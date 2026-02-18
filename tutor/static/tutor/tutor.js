@@ -455,8 +455,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (preparedImage) userMessageContent.push({ type: 'image_url', url: preparedImage });
         if (attachedImage) userMessageContent.push({ type: 'image_url', url: attachedImage });
 
-        chatHistory.push({ role: 'user', content: userMessageContent });
-        renderChatHistory();
+        const userMsg = { role: 'user', content: userMessageContent };
+        chatHistory.push(userMsg);
+        appendMessage(userMsg);
         displayLoadingIndicator();
         textInput.value = '';
         clearCanvas();
@@ -466,8 +467,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (photoInput) photoInput.value = '';
         if (photoPreviewContainer) photoPreviewContainer.innerHTML = '';
 
-        // Save whiteboard state right after sending
-        await saveWhiteboardState();
+        // Save whiteboard state right after sending (Non-blocking)
+        saveWhiteboardState();
 
         try {
             const res = await fetch(window.APP_CONFIG.tutorInteractUrl, {
@@ -475,44 +476,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { "Content-Type": "application/json", "X-CSRFToken": window.APP_CONFIG.csrfToken },
                 body: JSON.stringify({ messages: chatHistory })
             });
+            
+            removeLoadingIndicator();
+
             if (!res.ok) {
                 const errorData = await res.json();
                 throw new Error(`Erreur API: ${errorData.error || res.statusText}`);
             }
             const replyData = await res.json();
-            chatHistory.push({ role: 'assistant', content: replyData.content });
-            renderChatHistory();
+            const aiMsg = { role: 'assistant', content: replyData.content };
+            chatHistory.push(aiMsg);
+            appendMessage(aiMsg);
         } catch (err) {
             console.error(err);
-            chatHistory.push({ role: 'assistant', content: [{"type": "text", "text": `Sorry, an error occurred.`}] });
-            renderChatHistory();
+            removeLoadingIndicator();
+            const errorMsg = { role: 'assistant', content: [{"type": "text", "text": `Désolé, une erreur est survenue.`}] };
+            chatHistory.push(errorMsg);
+            appendMessage(errorMsg);
         } finally {
             sendBtn.disabled = false;
         }
     }
     
+    function createMessageElement(msg) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${msg.role === 'assistant' ? 'tutor' : 'user'}`;
+        let contentHTML = '';
+        if (Array.isArray(msg.content)) {
+            msg.content.forEach(item => {
+                if (item.type === 'text') {
+                    contentHTML += `<div class="comment-text">${item.text}</div>`;
+                }
+                if (item.type === 'image_url') {
+                    contentHTML += `<img src="${item.url || item.image_url.url}" alt="Réponse de l'élève">`;
+                }
+            });
+        } else {
+            contentHTML = msg.content;
+        }
+        messageDiv.innerHTML = contentHTML;
+        return messageDiv;
+    }
+
+    function appendMessage(msg) {
+        if (!chatbox) return;
+        const messageDiv = createMessageElement(msg);
+        chatbox.appendChild(messageDiv);
+        if (chatbox.parentElement) chatbox.parentElement.scrollTop = chatbox.parentElement.scrollHeight;
+        if (window.MathJax) MathJax.typesetPromise([messageDiv]);
+    }
+
     function renderChatHistory() {
         if (!chatbox) return;
         chatbox.innerHTML = '';
-        chatHistory.forEach(msg => {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `chat-message ${msg.role === 'assistant' ? 'tutor' : 'user'}`;
-            let contentHTML = '';
-            if (Array.isArray(msg.content)) {
-                msg.content.forEach(item => {
-                    if (item.type === 'text') {
-                        contentHTML += `<div class="comment-text">${item.text}</div>`;
-                    }
-                    if (item.type === 'image_url') {
-                        contentHTML += `<img src="${item.url || item.image_url.url}" alt="Réponse de l'élève">`;
-                    }
-                });
-            } else {
-                contentHTML = msg.content;
-            }
-            messageDiv.innerHTML = contentHTML;
-            chatbox.appendChild(messageDiv);
-        });
+        chatHistory.forEach(msg => chatbox.appendChild(createMessageElement(msg)));
         if (chatbox.parentElement) chatbox.parentElement.scrollTop = chatbox.parentElement.scrollHeight; // Scroll to bottom
         if (window.MathJax) MathJax.typesetPromise([chatbox]);
     }
@@ -524,6 +541,12 @@ document.addEventListener('DOMContentLoaded', () => {
         loadingDiv.innerHTML = `<span>Le tuteur réfléchit...</span>`;
         chatbox.appendChild(loadingDiv);
         if (chatbox.parentElement) chatbox.parentElement.scrollTop = chatbox.parentElement.scrollHeight;
+    }
+
+    function removeLoadingIndicator() {
+        if (!chatbox) return;
+        const loadingDiv = chatbox.querySelector('.loading-indicator');
+        if (loadingDiv) loadingDiv.remove();
     }
 
     // ===================================================================

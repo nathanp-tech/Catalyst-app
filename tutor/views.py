@@ -23,6 +23,7 @@ from documents.models import Category
 from django.db.models.functions import Cast
 from core.models import AppConfig
 from core.ai_utils import generate_ai_response
+from django.db.models import Prefetch
 
 class TutorPageView(TemplateView):
     """
@@ -48,14 +49,7 @@ class TutorPageView(TemplateView):
                     session.end_time = None
                     session.save()
 
-                messages = ChatMessage.objects.filter(session=session).order_by('timestamp')
-                
-                chat_history = []
-                for msg in messages:
-                    chat_history.append({
-                        'role': msg.role,
-                        'content': msg.content
-                    })
+                chat_history = list(ChatMessage.objects.filter(session=session).order_by('timestamp').values('role', 'content'))
                 
                 context['ongoing_session'] = True
                 context['chat_history_json'] = json.dumps(chat_history, cls=DjangoJSONEncoder)
@@ -78,12 +72,14 @@ class TutorPageView(TemplateView):
                 context['documents'] = Document.objects.all().order_by('title')
                 # Load categories for the tree if no session is in progress
                 context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(
-                    'children__children__documents'
+                    Prefetch('children', queryset=Category.objects.order_by('order', 'name')),
+                    Prefetch('children__documents', queryset=Document.objects.order_by('title'))
                 ).order_by('order', 'name')
         else:
             # Load categories for the tree if no session is in progress
             context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(
-                'children__children__documents'
+                Prefetch('children', queryset=Category.objects.order_by('order', 'name')),
+                Prefetch('children__documents', queryset=Document.objects.order_by('title'))
             ).order_by('order', 'name')
         return context
 
@@ -229,7 +225,10 @@ class BaseTutorAPIView(OpenAIAPIView):
         if not all([self.chat_session_id, self.exercise_context, self.client_messages]):
             return Response({"error": "Session is invalid or messages are missing."}, status=status.HTTP_400_BAD_REQUEST)
 
-        self.chat_session = get_object_or_404(ChatSession, id=self.chat_session_id)
+        # Optimisation : On diffère le chargement des champs lourds (whiteboard, summary, analysis)
+        # car on a seulement besoin de l'ID et des relations de base pour créer les messages.
+        self.chat_session = get_object_or_404(ChatSession.objects.defer('whiteboard_state', 'summary_data', 'teacher_analysis'), id=self.chat_session_id)
+        
         return self.handle_logic(request, *args, **kwargs)
 
     def handle_logic(self, request, *args, **kwargs):
@@ -258,6 +257,7 @@ class TutorInteractionView(BaseTutorAPIView):
         5.  **Utiliser le tutoiement** et un ton amical.
         6.  Garder tes réponses concises et focalisées sur une seule idée à la fois.
         7.  Si l'élève semble avoir compris, demande-lui d'expliquer avec ses propres mots pour valider sa compréhension.
+        8. Quand l'élève a terminé l'exercice (réponse juste et justification suffisante), félicite le et propose lui de terminer la session pour cet exercice.
         """
         
         # Logic to format the history for the API

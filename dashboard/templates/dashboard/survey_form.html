@@ -1,0 +1,242 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Questionnaire de satisfaction{% endblock %}
+
+{% block head_extra %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+    <style>
+        .survey-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+        }
+        .likert-group {
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+        }
+        .likert-group:last-of-type { border-bottom: none; }
+        .likert-label {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            display: block;
+            color: var(--header-color);
+        }
+        .likert-options {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.5rem;
+        }
+        .likert-option {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            flex: 1;
+        }
+        .likert-option input { margin-bottom: 0.5rem; transform: scale(1.2); }
+        .likert-scale-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+        textarea {
+            width: 100%;
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            min-height: 100px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1><i class="fas fa-poll"></i> Ton avis compte !</h1>
+    <p>Prends une minute pour nous dire comment tu te sens dans le cours.</p>
+</div>
+
+<div class="survey-container">
+    {% if error %}
+        <div style="color: red; margin-bottom: 1rem;">{{ error }}</div>
+    {% endif %}
+    
+    <form method="post">
+        {% csrf_token %}
+
+        <!-- Dimension 1 -->
+        <h3>Dimension 1 : Utilité perçue</h3>
+        <p style="margin-bottom: 1.5rem; color: var(--text-muted);">L'IA m'a-t-elle aidé ?</p>
+
+        <div class="likert-group">
+            <label class="likert-label">L'IA m'a aidé à comprendre mes erreurs dans le problème de modélisation.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="utility_errors" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+            <div class="likert-scale-labels"><span>Pas du tout</span><span>Tout à fait</span></div>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">Les indices donnés par l'IA étaient utiles pour avancer dans l'exercice.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="utility_hints" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">Grâce à l'IA, j'ai réussi à corriger mon raisonnement tout seul.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="utility_correction" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">Je pense que l'IA m'a permis de mieux comprendre le chapitre sur les fonctions.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="utility_understanding" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Dimension 2 -->
+        <h3>Dimension 2 : Facilité d'usage et Prompting</h3>
+        <p style="margin-bottom: 1.5rem; color: var(--text-muted);">Est-ce facile de lui parler ?</p>
+
+        <div class="likert-group">
+            <label class="likert-label">Il était facile de poser mes questions à l'IA (par écrit ou au stylet).</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="ease_asking" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">J'ai tout de suite su quelles questions poser pour obtenir de l'aide.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="ease_knowing" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">L'IA a bien compris mes demandes et mes questions.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="ease_understanding" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">J'ai dû reformuler mes questions plusieurs fois pour que l'IA m'aide vraiment.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="ease_reformulation" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Dimension 3 -->
+        <h3>Dimension 3 : Sentiment de compétence et d'apprentissage</h3>
+
+        <div class="likert-group">
+            <label class="likert-label">Je me suis senti capable de résoudre le problème avec l'aide de l'IA.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="competence_capability" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">Interagir avec l'IA m'a donné plus confiance en moi face aux difficultés mathématiques.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="competence_confidence" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">Je préfère demander de l'aide à l'IA plutôt qu'à l'enseignant quand je suis bloqué.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="competence_preference" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">J'ai appris de nouvelles façons de réfléchir grâce aux explications de l'IA.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="competence_new_ways" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Dimension 4 -->
+        <h3>Dimension 4 : Relation et posture face à l'IA</h3>
+
+        <div class="likert-group">
+            <label class="likert-label">J'ai eu l'impression que l'IA se comportait comme un véritable tuteur/professeur.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="relation_tutor" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">J'ai fait entièrement confiance aux conseils donnés par l'IA.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="relation_trust" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">Je pense que l'usage de l'IA rend les cours de mathématiques plus intéressants.</label>
+            <div class="likert-options">
+                {% for i in "12345" %}
+                <label class="likert-option"><input type="radio" name="relation_interest" value="{{ i }}" required> {{ i }}</label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Questions ouvertes -->
+        <h3>Questions ouvertes</h3>
+
+        <div class="likert-group">
+            <label class="likert-label">Qu'est-ce qui a été le plus difficile pour toi au moment de poser des questions (prompter) à l'IA ?</label>
+            <textarea name="open_difficulty" placeholder="Ta réponse..."></textarea>
+        </div>
+
+        <div class="likert-group">
+            <label class="likert-label">Y a-t-il un moment où l'IA ne t'a pas aidé ou t'a embrouillé ? Explique pourquoi.</label>
+            <textarea name="open_confusion" placeholder="Ta réponse..."></textarea>
+        </div>
+
+        <button type="submit" class="validate-btn" style="width: 100%; justify-content: center;">Envoyer mes réponses</button>
+    </form>
+</div>
+{% endblock %}

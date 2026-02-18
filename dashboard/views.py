@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import user_passes_test
 from django.urls import reverse
 from datetime import timedelta
 from documents.models import Document, Category
-from django.db.models import Q
+from django.db.models import Q, Avg, Count, Prefetch
 from django.contrib.auth.models import Group
 import json
 from django.contrib.auth import get_user_model
@@ -15,7 +15,7 @@ from django.http import JsonResponse
 from openai import OpenAI
 from collections import defaultdict
 from tutor.models import ChatSession, ChatMessage
-from .models import GroupConfiguration
+from .models import GroupConfiguration, SurveyResponse
 from core.models import AppConfig
 from core.ai_utils import generate_ai_response
 
@@ -36,7 +36,7 @@ class DashboardView(LoginRequiredMixin, View):
         if is_user_in_group(user, 'Professeurs'):
             context = {
                 'user': user,
-                'documents': Document.objects.filter(uploaded_by=user).order_by('-uploaded_at')
+                'documents': Document.objects.exclude(file='').order_by('title')
             }
             return render(request, 'dashboard/teacher_dashboard.html', context)
         
@@ -76,7 +76,7 @@ class StudentProgressionView(LoginRequiredMixin, TemplateView):
         # --- 1. General statistics ---
         total_sessions = sessions.count()
         total_duration_seconds = sum(((s.end_time - s.start_time).total_seconds() for s in sessions if s.end_time), 0)
-        total_messages = sum(s.messages.count() for s in sessions)
+        total_messages = ChatMessage.objects.filter(session__student=student).count()
 
         context['total_sessions'] = total_sessions
         context['total_duration_minutes'] = int(total_duration_seconds / 60)
@@ -186,9 +186,15 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
             try:
                 selected_group = Group.objects.get(id=selected_class_id)
                 context['selected_group'] = selected_group
+                # Optimisation : On précharge les sessions avec le compte des messages pour éviter le N+1
+                sessions_qs = ChatSession.objects.select_related('document').annotate(msg_count=Count('messages'))
+                
+                # Si un exercice est sélectionné, on filtre DÈS le préchargement
+                if selected_exercise_id:
+                    sessions_qs = sessions_qs.filter(document_id=selected_exercise_id)
+
                 students = User.objects.filter(groups=selected_group).prefetch_related(
-                    'chatsession_set__document', 
-                    'chatsession_set__messages'
+                    Prefetch('chatsession_set', queryset=sessions_qs)
                 )
             except Group.DoesNotExist:
                 pass # The group does not exist, return an empty student list
@@ -197,13 +203,17 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
         student_performance = []
         for student in students:
             performance_details = []
-            sessions_for_student = student.chatsession_set.all()
+            # On convertit en liste pour utiliser le cache du prefetch et éviter de nouvelles requêtes DB
+            sessions_for_student = list(student.chatsession_set.all())
 
             if selected_exercise_id:
                 # View by exercise
-                sessions_for_doc = sessions_for_student.filter(document_id=selected_exercise_id)
-                if sessions_for_doc.exists():
-                    latest_session = sessions_for_doc.latest('start_time')
+                # Comme on a filtré dans le prefetch, sessions_for_student contient déjà uniquement les bonnes sessions
+                sessions_for_doc = sessions_for_student
+                
+                if sessions_for_doc:
+                    # Traitement Python (rapide) au lieu de SQL (lent)
+                    latest_session = max(sessions_for_doc, key=lambda s: s.start_time)
                     total_duration = sum(((s.end_time - s.start_time).total_seconds() for s in sessions_for_doc if s.end_time), 0)
                     aggregated_errors = defaultdict(int)
                     for s in sessions_for_doc:
@@ -213,15 +223,15 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
 
                     performance_details.append({
                         'doc_title': latest_session.document.title,
-                        'attempts': sessions_for_doc.count(),
-                        'message_count': sum(s.messages.count() for s in sessions_for_doc),
+                        'attempts': len(sessions_for_doc),
+                        'message_count': sum(s.msg_count for s in sessions_for_doc),
                         'total_duration_seconds': total_duration,
                         'aggregated_errors': dict(aggregated_errors),
                         'last_activity': latest_session.start_time.strftime("%d/%m/%Y %H:%M"),
                     })
             else:
                 # Aggregated view "All exercises"
-                if sessions_for_student.exists():
+                if sessions_for_student:
                     error_key_map = {
                         "Erreurs de calcul": "calcul",
                         "Erreurs de substitution": "substitution",
@@ -242,12 +252,12 @@ class ClassDashboardView(LoginRequiredMixin, TemplateView):
 
                     performance_details.append({
                         'is_aggregated': True,
-                        'attempts': sessions_for_student.count(),
-                        'message_count': sum(s.messages.count() for s in sessions_for_student),
+                        'attempts': len(sessions_for_student),
+                        'message_count': sum(s.msg_count for s in sessions_for_student),
                         'total_duration_seconds': total_duration,
                         'aggregated_errors': dict(aggregated_errors),
                         'error_percentages': error_percentages,
-                        'last_activity': sessions_for_student.latest('start_time').start_time.strftime("%d/%m/%Y %H:%M"),
+                        'last_activity': max(sessions_for_student, key=lambda s: s.start_time).start_time.strftime("%d/%m/%Y %H:%M"),
                     })
 
             student_performance.append({
@@ -298,7 +308,13 @@ class SessionListView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         student_id = self.request.GET.get('student_id')
         document_id = self.request.GET.get('document_id')
-        sessions = ChatSession.objects.select_related('student', 'document').prefetch_related('student__groups').all().order_by('-start_time')
+        
+        # Optimisation : annotate(message_count=Count('messages')) permet de compter les messages
+        # directement en SQL, évitant une requête par ligne dans le tableau HTML.
+        sessions = ChatSession.objects.select_related('student', 'document') \
+            .prefetch_related('student__groups') \
+            .annotate(message_count=Count('messages')) \
+            .all().order_by('-start_time')
 
         # Get all documents for the filter
         all_documents = Document.objects.all().order_by('title')
@@ -665,10 +681,11 @@ class ClassAnalyticsAPIView(LoginRequiredMixin, View):
         except Group.DoesNotExist:
             return JsonResponse({'error': 'Class not found.'}, status=404)
 
-        # Preload all sessions and messages for students in the class in 2 queries
+        # Optimisation : On annote le nombre de messages directement
+        sessions_qs = ChatSession.objects.annotate(msg_count=Count('messages'))
         students = get_user_model().objects.filter(
             groups=teacher_class
-        ).prefetch_related('chatsession_set__messages')
+        ).prefetch_related(Prefetch('chatsession_set', queryset=sessions_qs))
 
         analytics_data = []
         error_key_map = {
@@ -692,7 +709,7 @@ class ClassAnalyticsAPIView(LoginRequiredMixin, View):
                 'student_name': student.username,
                 'total_sessions': len(sessions),
                 'total_duration_minutes': int(total_duration / 60),
-                'total_messages': sum(s.messages.count() for s in sessions),
+                'total_messages': sum(s.msg_count for s in sessions),
                 'total_errors': sum(error_counts.values()),
                 'error_distribution': dict(error_counts)
             })
@@ -701,3 +718,163 @@ class ClassAnalyticsAPIView(LoginRequiredMixin, View):
             'class_name': teacher_class.name,
             'analytics': analytics_data
         })
+
+
+class StudentSurveyView(LoginRequiredMixin, View):
+    """
+    Allows a student to submit a satisfaction survey.
+    """
+    def get(self, request, *args, **kwargs):
+        return render(request, 'dashboard/survey_form.html')
+
+    def post(self, request, *args, **kwargs):
+        try:
+            SurveyResponse.objects.create(
+                student=request.user,
+                utility_errors=int(request.POST.get('utility_errors')),
+                utility_hints=int(request.POST.get('utility_hints')),
+                utility_correction=int(request.POST.get('utility_correction')),
+                utility_understanding=int(request.POST.get('utility_understanding')),
+                ease_asking=int(request.POST.get('ease_asking')),
+                ease_knowing=int(request.POST.get('ease_knowing')),
+                ease_understanding=int(request.POST.get('ease_understanding')),
+                ease_reformulation=int(request.POST.get('ease_reformulation')),
+                competence_capability=int(request.POST.get('competence_capability')),
+                competence_confidence=int(request.POST.get('competence_confidence')),
+                competence_preference=int(request.POST.get('competence_preference')),
+                competence_new_ways=int(request.POST.get('competence_new_ways')),
+                relation_tutor=int(request.POST.get('relation_tutor')),
+                relation_trust=int(request.POST.get('relation_trust')),
+                relation_interest=int(request.POST.get('relation_interest')),
+                open_difficulty=request.POST.get('open_difficulty', ''),
+                open_confusion=request.POST.get('open_confusion', '')
+            )
+            return redirect('dashboard:dashboard')
+        except (ValueError, TypeError):
+            return render(request, 'dashboard/survey_form.html', {'error': "Veuillez répondre à toutes les questions."})
+
+
+@method_decorator(user_passes_test(is_teacher), name='dispatch')
+class TeacherSurveyResultsView(LoginRequiredMixin, TemplateView):
+    """
+    Displays analytics of student surveys for the teacher.
+    """
+    template_name = "dashboard/survey_results.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get all responses ordered by date
+        responses = SurveyResponse.objects.select_related('student').order_by('-created_at')
+        
+        if responses.exists():
+            # Helper to get avg of a field safely
+            def get_avg(field):
+                return responses.aggregate(Avg(field))[f'{field}__avg'] or 0
+
+            # Dimension 1: Utilité
+            avg_utility = (get_avg('utility_errors') + get_avg('utility_hints') + 
+                           get_avg('utility_correction') + get_avg('utility_understanding')) / 4
+
+            # Dimension 2: Facilité (Note: reformulation is negative, so we invert it for the score: 6 - score)
+            avg_ease = (get_avg('ease_asking') + get_avg('ease_knowing') + 
+                        get_avg('ease_understanding') + (6 - get_avg('ease_reformulation'))) / 4
+
+            # Dimension 3: Compétence
+            avg_competence = (get_avg('competence_capability') + get_avg('competence_confidence') + 
+                              get_avg('competence_preference') + get_avg('competence_new_ways')) / 4
+
+            # Dimension 4: Relation
+            avg_relation = (get_avg('relation_tutor') + get_avg('relation_trust') + 
+                            get_avg('relation_interest')) / 3
+            
+            chart_data_values = [avg_utility, avg_ease, avg_competence, avg_relation]
+        else:
+            chart_data_values = [0, 0, 0, 0]
+
+        # Prepare data for Chart.js
+        chart_data = {
+            'labels': ['Utilité', 'Facilité', 'Compétence', 'Relation'],
+            'data': chart_data_values
+        }
+
+        # --- Detailed Question Stats ---
+        # Configuration des dimensions pour l'analyse détaillée
+        dimensions_config = [
+            {
+                'key': 'utility', 'title': 'Utilité Perçue',
+                'questions': [
+                    ('utility_errors', "Aide sur les erreurs"),
+                    ('utility_hints', "Utilité des indices"),
+                    ('utility_correction', "Correction autonome"),
+                    ('utility_understanding', "Compréhension globale")
+                ]
+            },
+            {
+                'key': 'ease', 'title': 'Facilité d\'Usage',
+                'questions': [
+                    ('ease_asking', "Facilité à poser des questions"),
+                    ('ease_knowing', "Savoir quoi demander"),
+                    ('ease_understanding', "Compréhension par l'IA"),
+                    ('ease_reformulation', "Besoin de reformuler (Négatif)") 
+                ]
+            },
+            {
+                'key': 'competence', 'title': 'Sentiment de Compétence',
+                'questions': [
+                    ('competence_capability', "Capacité à résoudre"),
+                    ('competence_confidence', "Confiance en soi"),
+                    ('competence_preference', "Préférence pour l'IA"),
+                    ('competence_new_ways', "Nouvelles façons de penser")
+                ]
+            },
+            {
+                'key': 'relation', 'title': 'Relation & Posture',
+                'questions': [
+                    ('relation_tutor', "Posture de tuteur"),
+                    ('relation_trust', "Confiance dans les conseils"),
+                    ('relation_interest', "Intérêt pour le cours")
+                ]
+            }
+        ]
+
+        detailed_stats = []
+        for dim in dimensions_config:
+            dim_data = {'title': dim['title'], 'questions': []}
+            for field, label in dim['questions']:
+                values = [getattr(r, field) for r in responses]
+                if values:
+                    avg = sum(values) / len(values)
+                    # Distribution [count_1, count_2, count_3, count_4, count_5]
+                    distribution = [values.count(i) for i in range(1, 6)]
+                    # Calcul des pourcentages pour l'affichage CSS
+                    total = len(values)
+                    percentages = [(c / total) * 100 for c in distribution]
+                else:
+                    avg = 0
+                    distribution = [0, 0, 0, 0, 0]
+                    percentages = [0, 0, 0, 0, 0]
+                
+                dim_data['questions'].append({
+                    'label': label,
+                    'average': round(avg, 1),
+                    'distribution': distribution,
+                    'percentages': percentages,
+                    'field': field
+                })
+            detailed_stats.append(dim_data)
+        
+        context['detailed_stats'] = detailed_stats
+
+        # Calculate individual scores for the table
+        responses_list = []
+        for r in responses:
+            r.score_utility = (r.utility_errors + r.utility_hints + r.utility_correction + r.utility_understanding) / 4
+            r.score_ease = (r.ease_asking + r.ease_knowing + r.ease_understanding + (6 - r.ease_reformulation)) / 4
+            r.score_competence = (r.competence_capability + r.competence_confidence + r.competence_preference + r.competence_new_ways) / 4
+            r.score_relation = (r.relation_tutor + r.relation_trust + r.relation_interest) / 3
+            responses_list.append(r)
+
+        context['responses'] = responses_list
+        context['chart_data_json'] = json.dumps(chart_data)
+        return context

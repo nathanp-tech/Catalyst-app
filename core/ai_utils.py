@@ -4,7 +4,8 @@ import time
 import random
 from openai import OpenAI
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
 except ImportError:
     genai = None
 from django.conf import settings
@@ -31,14 +32,14 @@ def _call_openai(messages, model, temperature, response_format):
 
 def _call_gemini(messages, model, temperature, response_format):
     if genai is None:
-        raise ImportError("La librairie 'google-generativeai' n'est pas installée.")
+        raise ImportError("La librairie 'google-genai' n'est pas installée.")
         
-    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
     
     system_instruction = None
     contents = []
     
-    # Conversion du format OpenAI (messages) vers Gemini (contents + system_instruction)
+    # Conversion du format OpenAI (messages) vers Gemini (contents + system_instruction) avec le nouveau SDK
     for msg in messages:
         if msg['role'] == 'system':
             system_instruction = msg['content']
@@ -48,11 +49,11 @@ def _call_gemini(messages, model, temperature, response_format):
             
             content = msg.get('content')
             if isinstance(content, str):
-                parts.append(content)
+                parts.append(types.Part.from_text(text=content))
             elif isinstance(content, list):
                 for item in content:
                     if item.get('type') == 'text':
-                        parts.append(item.get('text'))
+                        parts.append(types.Part.from_text(text=item.get('text')))
                     elif item.get('type') == 'image_url':
                         # Gestion des images (base64 data URI)
                         url = item.get('image_url', {}).get('url', '')
@@ -61,32 +62,31 @@ def _call_gemini(messages, model, temperature, response_format):
                                 header, encoded = url.split(",", 1)
                                 mime_type = header.split(":")[1].split(";")[0]
                                 data = base64.b64decode(encoded)
-                                parts.append({'mime_type': mime_type, 'data': data})
+                                parts.append(types.Part.from_bytes(data=data, mime_type=mime_type))
                             except Exception as e:
                                 print(f"Erreur décodage image Gemini: {e}")
             
             if parts:
-                contents.append({'role': role, 'parts': parts})
+                contents.append(types.Content(role=role, parts=parts))
     
     # Configuration de la génération
-    generation_config = genai.GenerationConfig(
-        temperature=temperature
+    config = types.GenerateContentConfig(
+        temperature=temperature,
+        system_instruction=system_instruction
     )
     
     if response_format and response_format.get("type") == "json_object":
-        generation_config.response_mime_type = "application/json"
-
-    # Création du modèle et génération
-    model_instance = genai.GenerativeModel(
-        model_name=model,
-        system_instruction=system_instruction
-    )
+        config.response_mime_type = "application/json"
     
     # Mécanisme de retry pour gérer les erreurs de quota (429)
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = model_instance.generate_content(contents, generation_config=generation_config)
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=config
+            )
             return response.text
         except Exception as e:
             error_str = str(e)

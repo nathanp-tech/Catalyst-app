@@ -31,4 +31,8 @@ urlpatterns = [
     path('api/create-student-groups/', CreateStudentGroupsView.as_view(), name='create-student-groups'),
     path('api/save-group-configuration/', SaveGroupConfigurationView.as_view(), name='save-group-configuration'),
     path('api/class-analytics/<int:class_id>/', ClassAnalyticsAPIView.as_view(), name='class-analytics-api'),
+
+    # URLs pour les questionnaires
+    path('survey/', StudentSurveyView.as_view(), name='student-survey'),
+    path('survey/results/', TeacherSurveyResultsView.as_view(), name='survey-results'),
 ]

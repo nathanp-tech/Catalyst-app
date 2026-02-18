@@ -204,11 +204,11 @@
                 <td>{{ session.student.groups.first.name|default:"N/A" }}</td>
                 <td>{{ session.document.title|default:"N/A" }}</td>
                 <td>{{ session.start_time|date:"d/m H:i" }}</td>
-                <td style="text-align: center;">{{ session.messages.count }}</td>                
+                <td style="text-align: center;">{{ session.message_count }}</td>                
                 <td class="actions-cell">
                     <a href="{% url 'dashboard:session-detail' session.id %}" class="action-btn view-btn" title="Voir la conversation brute"><i class="fas fa-eye"></i> Voir</a>
                     <a href="{% url 'dashboard:co-analysis' session.id %}" class="action-btn analysis-btn" title="Lancer la co-analyse"><i class="fas fa-microscope"></i> Analyser</a>
-                    <button class="action-btn pdf-btn download-icon" data-session-id="{{ session.id }}" data-student-slug="{{ session.student.username|slugify }}" title="Télécharger en PDF">
+                    <button class="action-btn pdf-btn download-icon" data-session-id="{{ session.id }}" data-filename="{{ session.student.username }}_{{ session.student.groups.first.name|default:'SansClasse'|slugify }}_{{ session.document.title|default:'SansTitre'|slugify }}_{{ session.start_time|date:'Y-m-d_H-i' }}_{{ session.message_count }}_messages" title="Télécharger en PDF">
                         <i class="fas fa-file-pdf"></i> PDF
                     </button>
                     <button class="action-btn delete-btn delete-icon" data-session-id="{{ session.id }}" title="Supprimer la session"><i class="fas fa-trash-alt"></i></button>
@@ -247,8 +247,8 @@
         downloadIcons.forEach(iconCell => {
             iconCell.addEventListener('click', (event) => {
                 const iconContainer = event.currentTarget;
-                const { sessionId, studentSlug } = iconContainer.dataset;
-                downloadSessionPDF(iconContainer.querySelector('i'), sessionId, studentSlug);
+                const { sessionId, filename } = iconContainer.dataset;
+                downloadSessionPDF(iconContainer.querySelector('i'), sessionId, filename);
             });
         });
 
@@ -280,9 +280,9 @@
      * Génère et télécharge un PDF de la session de chat.
      * @param {HTMLElement} iconElement - L'icône sur laquelle l'utilisateur a cliqué.
      * @param {string} sessionId - L'ID de la session.
-     * @param {string} studentSlug - Le nom de l'étudiant pour le nom du fichier.
+     * @param {string} filename - Le nom du fichier PDF à générer.
      */
-    async function downloadSessionPDF(iconElement, sessionId, studentSlug) {
+    async function downloadSessionPDF(iconElement, sessionId, filename) {
         const originalIconClass = iconElement.className;
         iconElement.className = 'spinner'; // Affiche un spinner
 
@@ -342,7 +342,7 @@
             }
 
             // 5. Sauvegarder le fichier
-            pdf.save(`conversation-${studentSlug}-${sessionId}.pdf`);
+            pdf.save(`${filename}.pdf`);
 
         } catch (error) {
             console.error("Erreur lors de la génération du PDF:", error);
