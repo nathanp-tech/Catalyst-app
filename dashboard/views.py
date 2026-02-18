@@ -36,7 +36,7 @@ class DashboardView(LoginRequiredMixin, View):
         if is_user_in_group(user, 'Professeurs'):
             context = {
                 'user': user,
-                'documents': Document.objects.exclude(file='').order_by('title')
+                'documents': Document.objects.all().order_by('title')
             }
             return render(request, 'dashboard/teacher_dashboard.html', context)
         
