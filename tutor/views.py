@@ -48,7 +48,6 @@ class TutorPageView(TemplateView):
         if chat_session_id:
             try:
                 session = ChatSession.objects.select_related('document').get(id=chat_session_id)
-                # If resuming a session, ensure it is marked as "ongoing"
                 if resume_session_id and session.end_time:
                     session.end_time = None
                     session.save()
@@ -65,7 +64,6 @@ class TutorPageView(TemplateView):
                 if session.whiteboard_state:
                     context['whiteboard_state_json'] = json.dumps(session.whiteboard_state)
 
-                
                 self.request.session['exercise_context'] = {
                     'question': session.question_context,
                     'solution': session.solution_context
@@ -74,13 +72,11 @@ class TutorPageView(TemplateView):
             except ChatSession.DoesNotExist:
                 self.request.session.pop('chat_session_id', None)
                 context['documents'] = Document.objects.all().order_by('title')
-                # Load categories for the tree if no session is in progress
                 context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(
                     Prefetch('children', queryset=Category.objects.order_by('order', 'name')),
                     Prefetch('children__documents', queryset=Document.objects.order_by('title'))
                 ).order_by('order', 'name')
         else:
-            # Load categories for the tree if no session is in progress
             context['categories'] = Category.objects.filter(parent__isnull=True).prefetch_related(
                 Prefetch('children', queryset=Category.objects.order_by('order', 'name')),
                 Prefetch('children__documents', queryset=Document.objects.order_by('title'))
@@ -103,15 +99,12 @@ class StartSessionView(LoginRequiredMixin, View):
         document = get_object_or_404(Document, pk=document_id)
         solution_doc = Document.objects.filter(solution_for=document).first()
 
-        # Prepare the context for the AI
         question_context = f"Exercice: {document.title}"
         solution_context = "No solution provided."
         
         if solution_doc and solution_doc.file:
-            # Ideally, we would extract the text from the solution PDF here.
             solution_context = f"The solution for the exercise '{solution_doc.title}' is available."
         else:
-            # L'IA génère elle-même la correction détaillée si aucun document n'est fourni
             try:
                 solve_prompt = {
                     "role": "system",
@@ -127,7 +120,6 @@ class StartSessionView(LoginRequiredMixin, View):
                 print(f"Erreur lors de la génération de la correction: {e}")
                 solution_context = "Attention: Correction détaillée non disponible. Le tuteur devra s'appuyer sur ses propres calculs en temps réel."
 
-        # Create a new session
         chat_session = ChatSession.objects.create(
             student=request.user,
             document=document,
@@ -135,11 +127,10 @@ class StartSessionView(LoginRequiredMixin, View):
             solution_context=solution_context
         )
         
-        # Generate the AI's welcome message
         try:
             welcome_prompt = {
                 "role": "system",
-                "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit être un message d'accueil court et motivant pour l'inviter à commencer la première question (ex: 'Salut ! Prêt à commencer ? Commençons par regarder la question 1...'). Tu tutoies l'élève. Ne donne aucune réponse. Réponds uniquement en français."
+                "content": "Tu es un tuteur de maths sympathique. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit l'inviter à commencer spécifiquement par la question 1 (ex: 'Salut ! Prêt à commencer ? Commençons par la question 1...'). Tu tutoies l'élève. Ne donne aucune réponse."
             }
             assistant_welcome_text = generate_ai_response(
                 messages=[welcome_prompt, {"role": "user", "content": "Commence la conversation."}],
@@ -148,12 +139,10 @@ class StartSessionView(LoginRequiredMixin, View):
             )
             assistant_welcome_structured = [{"type": "text", "text": assistant_welcome_text}]
             
-            # Save the first message to the database
             ChatMessage.objects.create(session=chat_session, role='assistant', content=assistant_welcome_structured)
         except Exception as e:
             print(f"Error generating welcome message: {e}")
 
-        # Store the session ID and context in the user's session
         request.session['chat_session_id'] = chat_session.id
         request.session['exercise_context'] = {
             'question': chat_session.question_context,
@@ -174,7 +163,6 @@ class TutorImageAnalysisView(OpenAIAPIView):
         document = Document.objects.filter(file=document_url.replace('/media/', '')).first()
 
         try:
-            # Modification: Demande explicite d'une résolution ultra-détaillée
             extraction_prompt = {
                 "role": "system",
                 "content": "Tu es un expert en mathématiques. 1) Extrait l'énoncé complet et exact de l'image. 2) Résous l'exercice toi-même de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape, en incluant tous les calculs et raisonnements logiques. Renvoie UNIQUEMENT un objet JSON avec les clés 'question' (l'énoncé) et 'solution' (ta correction détaillée pas à pas)."
@@ -208,7 +196,7 @@ class TutorImageAnalysisView(OpenAIAPIView):
 
             welcome_prompt = {
                 "role": "system",
-                "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit l'inviter à commencer spécifiquement par la question 1 (ex: 'Salut ! Prêt à commencer ? Commençons par la question 1...'). Tu tutoies l'élève. Ne mentionne pas la solution. Réponds uniquement en français."
+                "content": "Tu es un tuteur de maths sympathique. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit l'inviter à commencer spécifiquement par la question 1. Tu tutoies l'élève. Ne mentionne pas la solution."
             }
             
             assistant_welcome_text = generate_ai_response(
@@ -216,7 +204,6 @@ class TutorImageAnalysisView(OpenAIAPIView):
                 model_name=AppConfig.get_active_model(),
                 temperature=0.5
             )
-            # Format the message to match the JSONField
             assistant_welcome_structured = [{"type": "text", "text": assistant_welcome_text}]
             
             ChatMessage.objects.create(
@@ -234,19 +221,12 @@ class TutorImageAnalysisView(OpenAIAPIView):
 
 
 # --- RAG SYSTEM ---
-# Variable globale pour garder l'index en mémoire vive (RAM)
 RAG_INDEX = None
 
 def get_relevant_curriculum(query, top_k=3):
-    """
-    Cherche les passages les plus pertinents du programme scolaire
-    par rapport à la requête de l'utilisateur (recherche vectorielle).
-    """
     global RAG_INDEX
-    # Chemin vers l'index généré par la commande build_curriculum_index
     index_path = settings.BASE_DIR / 'data' / 'curriculum_index.json'
 
-    # Chargement unique (Lazy loading)
     if RAG_INDEX is None:
         if os.path.exists(index_path):
             try:
@@ -256,22 +236,19 @@ def get_relevant_curriculum(query, top_k=3):
                 print(f"Erreur chargement index RAG: {e}")
                 return ""
         else:
-            return "" # Pas d'index trouvé
+            return ""
 
     if not RAG_INDEX:
         return ""
 
     try:
         query_vector = get_embedding(query)
-        
-        # Calcul de similarité cosinus (produit scalaire si vecteurs normalisés)
         scores = []
         for item in RAG_INDEX:
             doc_vector = item['vector']
             score = np.dot(query_vector, doc_vector)
             scores.append((score, item['text']))
         
-        # Trier par score décroissant et prendre les top_k
         scores.sort(key=lambda x: x[0], reverse=True)
         best_chunks = [text for score, text in scores[:top_k]]
         
@@ -281,9 +258,6 @@ def get_relevant_curriculum(query, top_k=3):
         return ""
 
 class BaseTutorAPIView(OpenAIAPIView):
-    """
-    Base class for tutor API views that share common logic.
-    """
     @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
         self.chat_session_id = request.session.get('chat_session_id')
@@ -316,37 +290,32 @@ class TutorInteractionView(BaseTutorAPIView):
             curriculum_instruction = f"""
             IMPORTANT - RESTRICTIONS DU PROGRAMME SCOLAIRE :
             Tu dois respecter le niveau et les méthodes du programme scolaire. Voici les extraits pertinents :
-            
             --- DÉBUT EXTRAITS PROGRAMME ---
             {relevant_curriculum}
             --- FIN EXTRAITS PROGRAMME ---
             """
 
         system_prompt = f"""
-        Tu es un tuteur de mathématiques bienveillant, exigeant et Socratique. Ton rôle est d'accompagner l'élève vers la réussite.
+        Tu es un tuteur de mathématiques strict et méthodique. Ton rôle n'est pas d'être complaisant, mais de garantir l'exactitude mathématique absolue.
 
         {curriculum_instruction}
 
         CONTEXTE DE L'EXERCICE :
         - Énoncé : "{self.exercise_context['question']}"
-        - Solution de référence (TRÈS IMPORTANT - à utiliser obligatoirement pour vérifier les réponses) : 
+        - Solution de référence (LA VÉRITÉ ABSOLUE) : 
         "{self.exercise_context['solution']}"
 
-        TES RÈGLES D'OR (À RESPECTER SCRUPULEUSEMENT) :
-        1. NE JAMAIS DONNER LA RÉPONSE DIRECTE : Ne donne ni la solution finale, ni la formule brute, ni la prochaine étape.
-        2. VALIDATION RIGOUREUSE (CRITIQUE) : Avant d'accepter une réponse, compare-la mathématiquement à la "Solution de référence". Ne valide JAMAIS un résultat faux. Si l'élève a faux, identifie son erreur logique sans lui donner la correction immédiate (ex: "Tu as écrit -10x, mais regarde bien l'énoncé : est-ce le prix qui baisse de 10 CHF, ou est-ce autre chose ?").
-        3. ANALYSER LA RÉPONSE DE L'ÉLÈVE : Identifie ses erreurs ou ses bonnes idées. S'il oublie un concept (ex: somme des angles = 180°), demande-lui "Te souviens-tu de la règle des angles ?" au lieu de lui donner la valeur.
-        4. GUIDAGE ÉTAPE PAR ÉTAPE : Ne traite qu'une seule question ou idée à la fois. Si vous débutez, dis "Commençons par répondre à la question 1". Ne laisse pas l'élève sauter des étapes. 
-        5. DONNER DES INDICES SUBTILS : Si l'élève est bloqué, pose des questions ouvertes.
-        6. TOLÉRANCE SUR LA MÉTHODE : N'oblige pas l'élève à utiliser une méthode spécifique si sa méthode mathématique est correcte et mène au bon résultat.
-        7. PROGRESSION : Seulement APRÈS avoir vérifié et validé formellement que la réponse à la question en cours est 100% correcte, félicite-le et suggère explicitement de passer à la question suivante. Si l'élève semble avoir compris, demande-lui d'expliquer avec ses propres mots pour valider sa compréhension.
-        8. TON ET STYLE : Utilise le tutoiement, un ton amical, et reste toujours concis (une idée à la fois).
-        9. FIN DE L'EXERCICE : Quand l'élève a terminé l'exercice (réponse juste et justification suffisante), félicite-le et propose-lui de terminer la session.
+        RÈGLES D'OR DE LA CORRECTION (CRITIQUES) :
+        1. VÉRIFICATION INTRANSIGEANTE : Compare TOUJOURS la proposition de l'élève à la Solution de référence et à l'énoncé. Si l'élève propose une formule (comme 20-10x), demande-toi d'abord si les nombres correspondent à ceux de l'énoncé. Ne valide JAMAIS une formule contenant les mauvaises constantes.
+        2. DIRE CLAIREMENT QUAND C'EST FAUX : Si la réponse est fausse, tu DOIS le dire sans ambiguïté. Commence ta réponse par "Non, ce n'est pas correct" ou "C'est faux".
+        3. EXPLIQUER L'ERREUR SANS DONNER LA RÉPONSE : Après avoir dit que c'est faux, explique EXACTEMENT où l'élève s'est trompé en pointant la contradiction avec l'énoncé. 
+           *Exemple attendu : "Non, ta réponse P(x) = 20 - 10x est fausse. Dans ta formule, tu dis que le prix baisse de 10 CHF. Or, si tu relis l'énoncé, de combien le prix baisse-t-il réellement à chaque étape ? Le chiffre 10 correspond à autre chose."*
+        4. NE PAS FAIRE LE CALCUL À SA PLACE : N'écris pas la formule corrigée. Force l'élève à la trouver suite à ton explication de son erreur.
+        5. PROGRESSION STRICTE : Ne propose de passer à la question suivante que si la réponse actuelle est mathématiquement identique à la solution de référence.
 
-        Toutes tes réponses doivent être en français. Utilise la syntaxe classique pour les équations mathématiques.
+        TON ET STYLE : Utilise le tutoiement. Sois direct, honnête et rigoureux. N'essaie pas de chercher du vrai dans une formule fondamentalement fausse.
         """
         
-        # Logic to format the history for the API
         processed_messages = []
         for msg in self.client_messages:
             new_msg = {'role': msg['role']}
@@ -369,7 +338,7 @@ class TutorInteractionView(BaseTutorAPIView):
             assistant_reply_text = generate_ai_response(
                 messages=api_messages,
                 model_name=AppConfig.get_active_model(),
-                temperature=0.3 # Température abaissée pour plus de rigueur analytique tout en gardant l'empathie
+                temperature=0.2 # Température très basse pour limiter la créativité complaisante
             )
 
             assistant_reply_structured = [{"type": "text", "text": assistant_reply_text}]
@@ -387,9 +356,6 @@ class TutorInteractionView(BaseTutorAPIView):
 
 
 class EndSessionView(APIView):
-    """
-    Ends the current tutoring session and cleans up the user's session.
-    """
     @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
         chat_session_id = request.session.get('chat_session_id')
@@ -398,7 +364,6 @@ class EndSessionView(APIView):
                 session = ChatSession.objects.get(id=chat_session_id, student=request.user)
                 if not session.end_time:
                     session.end_time = now()
-                    # Start summary generation in the background
                     thread = threading.Thread(target=generate_and_save_session_summary, args=[session.id])
                     thread.start()
                     session.save()
@@ -413,9 +378,6 @@ class EndSessionView(APIView):
 
 
 class SaveWhiteboardView(APIView):
-    """
-    Saves the current state of the whiteboard for a given session.
-    """
     @method_decorator(csrf_protect)
     def post(self, request, *args, **kwargs):
         chat_session_id = request.session.get('chat_session_id')
@@ -433,3 +395,15 @@ class SaveWhiteboardView(APIView):
             return Response({"error": "Session not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class GetSolutionView(APIView):
+    """
+    API endpoint to retrieve the solution of the current exercise.
+    """
+    def get(self, request, *args, **kwargs):
+        chat_session_id = request.session.get('chat_session_id')
+        if not chat_session_id:
+            return Response({"error": "No active session."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        session = get_object_or_404(ChatSession, id=chat_session_id, student=request.user)
+        return Response({"solution": session.solution_context}, status=status.HTTP_200_OK)

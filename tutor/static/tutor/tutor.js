@@ -549,6 +549,47 @@ document.addEventListener('DOMContentLoaded', () => {
         if (loadingDiv) loadingDiv.remove();
     }
 
+    // --- SOLUTION MODAL ---
+    function showSolutionModal(solutionText) {
+        // Create modal elements dynamically
+        const modalOverlay = document.createElement('div');
+        modalOverlay.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; display:flex; justify-content:center; align-items:center;';
+        
+        const modalContent = document.createElement('div');
+        modalContent.style.cssText = 'background:white; padding:2rem; border-radius:12px; max-width:600px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 5px 15px rgba(0,0,0,0.3); position:relative;';
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.style.cssText = 'position:absolute; top:10px; right:15px; background:none; border:none; font-size:1.5rem; cursor:pointer; color:#666;';
+        closeBtn.onclick = () => document.body.removeChild(modalOverlay);
+        
+        const title = document.createElement('h2');
+        title.innerText = 'Correction de l\'exercice';
+        title.style.cssText = 'margin-top:0; color:#2c3e50; border-bottom:2px solid #3498db; padding-bottom:0.5rem; margin-bottom:1rem;';
+        
+        const contentDiv = document.createElement('div');
+        // Simple formatting for line breaks
+        contentDiv.innerHTML = solutionText.replace(/\n/g, '<br>');
+        contentDiv.style.cssText = 'line-height:1.6; color:#34495e; font-size:1rem;';
+        
+        modalContent.appendChild(closeBtn);
+        modalContent.appendChild(title);
+        modalContent.appendChild(contentDiv);
+        modalOverlay.appendChild(modalContent);
+        
+        // Close on click outside
+        modalOverlay.onclick = (e) => {
+            if (e.target === modalOverlay) document.body.removeChild(modalOverlay);
+        };
+        
+        document.body.appendChild(modalOverlay);
+        
+        // Render MathJax if available
+        if (window.MathJax) {
+            MathJax.typesetPromise([contentDiv]);
+        }
+    }
+
     // ===================================================================
     // ===               EVENT LISTENERS ATTACHMENT                  ===
     // ===================================================================
@@ -570,6 +611,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert("Une erreur est survenue.");
                 }
             });
+
+            // --- INJECT "SEE SOLUTION" BUTTON ---
+            const showSolutionBtn = document.createElement('button');
+            showSolutionBtn.id = 'showSolutionBtn';
+            showSolutionBtn.innerHTML = '<i class="fas fa-key"></i> Voir la correction';
+            // Style similar to other action buttons but distinct
+            showSolutionBtn.style.cssText = `
+                margin-top: 10px;
+                width: 100%;
+                padding: 12px;
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                font-weight: 600;
+                display: flex; align-items: center; justify-content: center; gap: 8px;
+                transition: background 0.2s;
+            `;
+            showSolutionBtn.onmouseover = () => showSolutionBtn.style.backgroundColor = '#5a6268';
+            showSolutionBtn.onmouseout = () => showSolutionBtn.style.backgroundColor = '#6c757d';
+            
+            showSolutionBtn.addEventListener('click', fetchAndShowSolution);
+            
+            endExerciseBtn.parentNode.insertBefore(showSolutionBtn, endExerciseBtn.nextSibling);
         }
         if (sendBtn) sendBtn.addEventListener('click', sendToTutor);
         
@@ -622,6 +688,20 @@ document.addEventListener('DOMContentLoaded', () => {
         
     }
     
+    async function fetchAndShowSolution() {
+        if (!confirm("Es-tu sûr de vouloir voir la correction ? Cela peut réduire l'intérêt de l'exercice.")) return;
+        
+        try {
+            const res = await fetch('/tutor/api/get-solution/');
+            if (!res.ok) throw new Error('Erreur réseau');
+            const data = await res.json();
+            showSolutionModal(data.solution);
+        } catch (error) {
+            console.error("Error fetching solution:", error);
+            alert("Impossible de récupérer la correction pour le moment.");
+        }
+    }
+
     // --- Application Start ---
     initialize();
 });

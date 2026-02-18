@@ -1,7 +1,7 @@
 from django.urls import path
 from django.contrib.auth.decorators import login_required
 
-from .views import TutorInteractionView, TutorPageView, TutorImageAnalysisView, EndSessionView, SaveWhiteboardView, StartSessionView
+from .views import TutorInteractionView, TutorPageView, TutorImageAnalysisView, EndSessionView, SaveWhiteboardView, StartSessionView, GetSolutionView
 
 urlpatterns = [
     # The HTML page for the chat
@@ -15,4 +15,6 @@ urlpatterns = [
     path("api/end-session/", EndSessionView.as_view(), name="end-session"),
     # NEW URL: Endpoint to save the whiteboard state
     path("api/save-whiteboard/", SaveWhiteboardView.as_view(), name="save-whiteboard"),
+    # NEW URL: Endpoint to get the solution
+    path("api/get-solution/", GetSolutionView.as_view(), name="get-solution"),
 ]
