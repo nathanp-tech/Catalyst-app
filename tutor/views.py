@@ -3,6 +3,7 @@
 import threading
 import os
 import json
+import numpy as np
 from django.core.serializers.json import DjangoJSONEncoder
 from openai import OpenAI
 from django.urls import reverse, reverse_lazy
@@ -22,8 +23,11 @@ from dashboard.services import generate_and_save_session_summary
 from documents.models import Category
 from django.db.models.functions import Cast
 from core.models import AppConfig
-from core.ai_utils import generate_ai_response
+from core.ai_utils import generate_ai_response, get_embedding
 from django.db.models import Prefetch
+from django.conf import settings
+from django.core.cache import cache
+
 
 class TutorPageView(TemplateView):
     """
@@ -212,6 +216,53 @@ class TutorImageAnalysisView(OpenAIAPIView):
             return Response({"error": "An error occurred while analyzing the image."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# --- RAG SYSTEM ---
+# Variable globale pour garder l'index en mémoire vive (RAM)
+RAG_INDEX = None
+
+def get_relevant_curriculum(query, top_k=3):
+    """
+    Cherche les passages les plus pertinents du programme scolaire
+    par rapport à la requête de l'utilisateur (recherche vectorielle).
+    """
+    global RAG_INDEX
+    # Chemin vers l'index généré par la commande build_curriculum_index
+    index_path = settings.BASE_DIR / 'data' / 'curriculum_index.json'
+
+    # Chargement unique (Lazy loading)
+    if RAG_INDEX is None:
+        if os.path.exists(index_path):
+            try:
+                with open(index_path, 'r', encoding='utf-8') as f:
+                    RAG_INDEX = json.load(f)
+            except Exception as e:
+                print(f"Erreur chargement index RAG: {e}")
+                return ""
+        else:
+            return "" # Pas d'index trouvé
+
+    if not RAG_INDEX:
+        return ""
+
+    try:
+        query_vector = get_embedding(query)
+        
+        # Calcul de similarité cosinus (produit scalaire si vecteurs normalisés)
+        scores = []
+        for item in RAG_INDEX:
+            doc_vector = item['vector']
+            score = np.dot(query_vector, doc_vector)
+            scores.append((score, item['text']))
+        
+        # Trier par score décroissant et prendre les top_k
+        scores.sort(key=lambda x: x[0], reverse=True)
+        best_chunks = [text for score, text in scores[:top_k]]
+        
+        return "\n---\n".join(best_chunks)
+    except Exception as e:
+        print(f"Erreur recherche RAG: {e}")
+        return ""
+
 class BaseTutorAPIView(OpenAIAPIView):
     """
     Base class for tutor API views that share common logic.
@@ -242,9 +293,29 @@ class TutorInteractionView(BaseTutorAPIView):
         ChatMessage.objects.create(session=self.chat_session, role='user', content=user_message_content)
         request.session['hint_level'] = 1
 
+        # RAG : On cherche le contexte pertinent basé sur le dernier message de l'élève
+        # et le contexte de l'exercice (pour être sûr de rester dans le sujet)
+        search_query = f"{self.exercise_context['question']} {user_message_content}"
+        relevant_curriculum = get_relevant_curriculum(search_query)
+        
+        curriculum_instruction = ""
+        if relevant_curriculum:
+            curriculum_instruction = f"""
+            IMPORTANT - RESTRICTIONS DU PROGRAMME SCOLAIRE :
+            Tu dois respecter le niveau et les méthodes du programme scolaire. Voici les extraits pertinents du programme officiel :
+            
+            --- DÉBUT EXTRAITS PROGRAMME ---
+            {relevant_curriculum}
+            --- FIN EXTRAITS PROGRAMME ---
+            
+            N'utilise PAS de concepts hors de ces extraits si possible.
+            """
+
         system_prompt = f"""
         Tu es un tuteur de mathématiques bienveillant et Socratique. Ton objectif est de guider l'élève sans jamais lui donner la réponse ni les formules directement. Toutes tes réponses doivent être en français.
         
+        {curriculum_instruction}
+
         Voici le contexte de l'exercice :
         - La question est : "{self.exercise_context['question']}"
         - La solution correcte est : "{self.exercise_context['solution']}"

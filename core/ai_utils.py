@@ -97,3 +97,14 @@ def _call_gemini(messages, model, temperature, response_format):
                     time.sleep(sleep_time)
                     continue
             raise e
+
+def get_embedding(text, model="text-embedding-3-small"):
+    """
+    Génère un vecteur d'embedding pour un texte donné via OpenAI.
+    """
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    text = text.replace("\n", " ")
+    return client.embeddings.create(
+        input=[text], 
+        model=model
+    ).data[0].embedding
