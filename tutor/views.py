@@ -27,6 +27,7 @@ from core.ai_utils import generate_ai_response, get_embedding
 from django.db.models import Prefetch
 from django.conf import settings
 from django.core.cache import cache
+from pypdf import PdfReader
 
 
 class TutorPageView(TemplateView):
@@ -102,16 +103,42 @@ class StartSessionView(LoginRequiredMixin, View):
         question_context = f"Exercice: {document.title}"
         solution_context = "No solution provided."
         
+        # Fonction utilitaire pour extraire le texte d'un PDF
+        def extract_pdf_text(doc_file):
+            text = ""
+            try:
+                if doc_file:
+                    with doc_file.open('rb') as f:
+                        reader = PdfReader(f)
+                        for page in reader.pages:
+                            extracted = page.extract_text()
+                            if extracted:
+                                text += extracted + "\n"
+            except Exception as e:
+                print(f"Erreur lecture PDF: {e}")
+            return text
+
         if solution_doc and solution_doc.file:
-            solution_context = f"The solution for the exercise '{solution_doc.title}' is available."
+            # Si un corrigé existe, on essaie de lire son contenu
+            extracted = extract_pdf_text(solution_doc.file)
+            if extracted.strip():
+                solution_context = extracted
+            else:
+                solution_context = f"The solution for the exercise '{solution_doc.title}' is available."
         else:
             try:
+                # Sinon, on lit l'énoncé pour le donner à l'IA
+                exercise_content = f"Titre : {document.title}"
+                extracted_text = extract_pdf_text(document.file)
+                if extracted_text.strip():
+                    exercise_content += f"\n\nContenu de l'exercice (extrait du PDF) :\n{extracted_text}"
+
                 solve_prompt = {
                     "role": "system",
                     "content": "Tu es un professeur de mathématiques expert. Résous l'exercice suivant de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape. Fournis toutes les équations, les calculs intermédiaires et les justifications logiques. Cette résolution servira de correction de référence absolue."
                 }
                 generated_solution = generate_ai_response(
-                    messages=[solve_prompt, {"role": "user", "content": f"Énoncé ou titre de l'exercice : {document.title}"}],
+                    messages=[solve_prompt, {"role": "user", "content": exercise_content}],
                     model_name=AppConfig.get_active_model(),
                     temperature=0.2
                 )
@@ -307,13 +334,14 @@ class TutorInteractionView(BaseTutorAPIView):
 
         RÈGLES D'OR DE LA CORRECTION (CRITIQUES) :
         1. VÉRIFICATION INTRANSIGEANTE : Compare TOUJOURS la proposition de l'élève à la Solution de référence et à l'énoncé. Si l'élève propose une formule (comme 20-10x), demande-toi d'abord si les nombres correspondent à ceux de l'énoncé. Ne valide JAMAIS une formule contenant les mauvaises constantes.
-        2. DIRE CLAIREMENT QUAND C'EST FAUX : Si la réponse est fausse, tu DOIS le dire sans ambiguïté. Commence ta réponse par "Non, ce n'est pas correct" ou "C'est faux".
-        3. EXPLIQUER L'ERREUR SANS DONNER LA RÉPONSE : Après avoir dit que c'est faux, explique EXACTEMENT où l'élève s'est trompé en pointant la contradiction avec l'énoncé. 
-           *Exemple attendu : "Non, ta réponse P(x) = 20 - 10x est fausse. Dans ta formule, tu dis que le prix baisse de 10 CHF. Or, si tu relis l'énoncé, de combien le prix baisse-t-il réellement à chaque étape ? Le chiffre 10 correspond à autre chose."*
-        4. NE PAS FAIRE LE CALCUL À SA PLACE : N'écris pas la formule corrigée. Force l'élève à la trouver suite à ton explication de son erreur.
-        5. PROGRESSION STRICTE : Ne propose de passer à la question suivante que si la réponse actuelle est mathématiquement identique à la solution de référence.
+        2. DIRE CLAIREMENT QUAND C'EST FAUX : Si la réponse est fausse, tu DOIS le dire sans ambiguïté. Commence ta réponse par "Non, ce n'est pas correct".
+        3. ANALYSER LA RÉPONSE DE L'ÉLÈVE : Identifie ses erreurs ou ses bonnes idées. Après avoir dit que c'est faux, explique EXACTEMENT où l'élève s'est trompé en pointant la contradiction avec l'énoncé. S'il oublie un concept (ex: somme des angles = 180°), demande-lui "Te souviens-tu de la règle des angles ?" au lieu de lui donner la valeur.
+        4. GUIDAGE ÉTAPE PAR ÉTAPE : Ne traite qu'une seule question ou idée à la fois. Si vous débutez, dis "Commençons par répondre à la question 1". Ne laisse pas l'élève sauter des étapes.
+        5. DONNER DES INDICES SUBTILS : Si l'élève est bloqué, pose des questions ouvertes. N'écris pas la formule corrigée et ne fais pas le calcul à sa place. Force l'élève à la trouver suite à ton explication.
+        6. TOLÉRANCE SUR LA MÉTHODE : N'oblige pas l'élève à utiliser une méthode spécifique si sa méthode mathématique est correcte et mène au bon résultat (sauf si le programme scolaire l'interdit).
+        7. PROGRESSION : Seulement APRÈS avoir vérifié et validé formellement que la réponse à la question en cours est 100% correcte, félicite-le et suggère explicitement de passer à la question suivante. Si l'élève semble avoir compris, demande-lui d'expliquer avec ses propres mots pour valider sa compréhension.
 
-        TON ET STYLE : Utilise le tutoiement. Sois direct, honnête et rigoureux. N'essaie pas de chercher du vrai dans une formule fondamentalement fausse.
+        TON ET STYLE : Utilise le tutoiement, un ton amical mais rigoureux, et reste toujours concis (une idée à la fois).
         """
         
         processed_messages = []
