@@ -106,10 +106,26 @@ class StartSessionView(LoginRequiredMixin, View):
         # Prepare the context for the AI
         question_context = f"Exercice: {document.title}"
         solution_context = "No solution provided."
+        
         if solution_doc and solution_doc.file:
             # Ideally, we would extract the text from the solution PDF here.
-            # For now, we'll stick to basic information.
             solution_context = f"The solution for the exercise '{solution_doc.title}' is available."
+        else:
+            # L'IA génère elle-même la correction détaillée si aucun document n'est fourni
+            try:
+                solve_prompt = {
+                    "role": "system",
+                    "content": "Tu es un professeur de mathématiques expert. Résous l'exercice suivant de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape. Fournis toutes les équations, les calculs intermédiaires et les justifications logiques. Cette résolution servira de correction de référence absolue."
+                }
+                generated_solution = generate_ai_response(
+                    messages=[solve_prompt, {"role": "user", "content": f"Énoncé ou titre de l'exercice : {document.title}"}],
+                    model_name=AppConfig.get_active_model(),
+                    temperature=0.2
+                )
+                solution_context = generated_solution
+            except Exception as e:
+                print(f"Erreur lors de la génération de la correction: {e}")
+                solution_context = "Attention: Correction détaillée non disponible. Le tuteur devra s'appuyer sur ses propres calculs en temps réel."
 
         # Create a new session
         chat_session = ChatSession.objects.create(
@@ -123,7 +139,7 @@ class StartSessionView(LoginRequiredMixin, View):
         try:
             welcome_prompt = {
                 "role": "system",
-                "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit être un message d'accueil court et motivant pour l'inviter à commencer. Tu tutoies l'élève. Ne mentionne ni la question ni la solution. Réponds uniquement en français."
+                "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit être un message d'accueil court et motivant pour l'inviter à commencer la première question (ex: 'Salut ! Prêt à commencer ? Commençons par regarder la question 1...'). Tu tutoies l'élève. Ne donne aucune réponse. Réponds uniquement en français."
             }
             assistant_welcome_text = generate_ai_response(
                 messages=[welcome_prompt, {"role": "user", "content": "Commence la conversation."}],
@@ -158,12 +174,13 @@ class TutorImageAnalysisView(OpenAIAPIView):
         document = Document.objects.filter(file=document_url.replace('/media/', '')).first()
 
         try:
+            # Modification: Demande explicite d'une résolution ultra-détaillée
             extraction_prompt = {
                 "role": "system",
-                "content": "Tu es un expert en mathématiques. Extrait la question et la solution détaillée de l'image. Renvoie UNIQUEMENT un objet JSON avec les clés 'question' et 'solution'."
+                "content": "Tu es un expert en mathématiques. 1) Extrait l'énoncé complet et exact de l'image. 2) Résous l'exercice toi-même de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape, en incluant tous les calculs et raisonnements logiques. Renvoie UNIQUEMENT un objet JSON avec les clés 'question' (l'énoncé) et 'solution' (ta correction détaillée pas à pas)."
             }
             user_content = [
-                {"type": "text", "text": "Analyse cette image et extrais-en la question et la solution."},
+                {"type": "text", "text": "Analyse cette image, extrais l'énoncé complet puis rédige la correction détaillée étape par étape."},
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
             ]
             
@@ -191,7 +208,7 @@ class TutorImageAnalysisView(OpenAIAPIView):
 
             welcome_prompt = {
                 "role": "system",
-                "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit être un message d'accueil court et motivant pour l'inviter à commencer. Tu tutoies l'élève. Ne mentionne ni la question ni la solution. Réponds uniquement en français."
+                "content": "Tu es un tuteur de maths sympathique et encourageant. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit l'inviter à commencer spécifiquement par la question 1 (ex: 'Salut ! Prêt à commencer ? Commençons par la question 1...'). Tu tutoies l'élève. Ne mentionne pas la solution. Réponds uniquement en français."
             }
             
             assistant_welcome_text = generate_ai_response(
@@ -276,8 +293,6 @@ class BaseTutorAPIView(OpenAIAPIView):
         if not all([self.chat_session_id, self.exercise_context, self.client_messages]):
             return Response({"error": "Session is invalid or messages are missing."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Optimisation : On diffère le chargement des champs lourds (whiteboard, summary, analysis)
-        # car on a seulement besoin de l'ID et des relations de base pour créer les messages.
         self.chat_session = get_object_or_404(ChatSession.objects.defer('whiteboard_state', 'summary_data', 'teacher_analysis'), id=self.chat_session_id)
         
         return self.handle_logic(request, *args, **kwargs)
@@ -293,8 +308,6 @@ class TutorInteractionView(BaseTutorAPIView):
         ChatMessage.objects.create(session=self.chat_session, role='user', content=user_message_content)
         request.session['hint_level'] = 1
 
-        # RAG : On cherche le contexte pertinent basé sur le dernier message de l'élève
-        # et le contexte de l'exercice (pour être sûr de rester dans le sujet)
         search_query = f"{self.exercise_context['question']} {user_message_content}"
         relevant_curriculum = get_relevant_curriculum(search_query)
         
@@ -302,47 +315,45 @@ class TutorInteractionView(BaseTutorAPIView):
         if relevant_curriculum:
             curriculum_instruction = f"""
             IMPORTANT - RESTRICTIONS DU PROGRAMME SCOLAIRE :
-            Tu dois respecter le niveau et les méthodes du programme scolaire. Voici les extraits pertinents du programme officiel :
+            Tu dois respecter le niveau et les méthodes du programme scolaire. Voici les extraits pertinents :
             
             --- DÉBUT EXTRAITS PROGRAMME ---
             {relevant_curriculum}
             --- FIN EXTRAITS PROGRAMME ---
-            
-            N'utilise PAS de concepts hors de ces extraits si possible.
             """
 
         system_prompt = f"""
-        Tu es un tuteur de mathématiques bienveillant et Socratique. Ton objectif est de guider l'élève sans jamais lui donner la réponse ni les formules directement. Toutes tes réponses doivent être en français.
-        
+        Tu es un tuteur de mathématiques bienveillant, exigeant et Socratique. Ton rôle est d'accompagner l'élève vers la réussite.
+
         {curriculum_instruction}
 
-        Voici le contexte de l'exercice :
-        - La question est : "{self.exercise_context['question']}"
-        - La solution correcte est : "{self.exercise_context['solution']}"
+        CONTEXTE DE L'EXERCICE :
+        - Énoncé : "{self.exercise_context['question']}"
+        - Solution de référence (TRÈS IMPORTANT - à utiliser obligatoirement pour vérifier les réponses) : 
+        "{self.exercise_context['solution']}"
 
-        Tes règles d'or sont :
-        1.  **Ne jamais donner la réponse directe** ou la prochaine étape.
-        2.  **Analyser la réponse de l'élève** (image et/ou texte) pour identifier les erreurs ou les bonnes idées.
-        3.  **Si la réponse est incorrecte, ne donne pas la correction tout de suite.** Guide l'élève pour qu'il retrouve la règle ou le concept lui-même. Par exemple, si l'élève oublie que la somme des angles d'un triangle est 180°, demande-lui : "Te souviens-tu de la somme des angles d'un triangle ?" au lieu de lui donner la valeur.
-        4.  **Donner des indices subtils** si l'élève est bloqué, en posant des questions ouvertes.
-        5.  **Utiliser le tutoiement** et un ton amical.
-        6.  Garder tes réponses concises et focalisées sur une seule idée à la fois.
-        7.  Si l'élève semble avoir compris, demande-lui d'expliquer avec ses propres mots pour valider sa compréhension.
-        8. Quand l'élève a terminé l'exercice (réponse juste et justification suffisante), félicite le et propose lui de terminer la session pour cet exercice.
+        TES RÈGLES D'OR (À RESPECTER SCRUPULEUSEMENT) :
+        1. NE JAMAIS DONNER LA RÉPONSE DIRECTE : Ne donne ni la solution finale, ni la formule brute, ni la prochaine étape.
+        2. VALIDATION RIGOUREUSE (CRITIQUE) : Avant d'accepter une réponse, compare-la mathématiquement à la "Solution de référence". Ne valide JAMAIS un résultat faux. Si l'élève a faux, identifie son erreur logique sans lui donner la correction immédiate (ex: "Tu as écrit -10x, mais regarde bien l'énoncé : est-ce le prix qui baisse de 10 CHF, ou est-ce autre chose ?").
+        3. ANALYSER LA RÉPONSE DE L'ÉLÈVE : Identifie ses erreurs ou ses bonnes idées. S'il oublie un concept (ex: somme des angles = 180°), demande-lui "Te souviens-tu de la règle des angles ?" au lieu de lui donner la valeur.
+        4. GUIDAGE ÉTAPE PAR ÉTAPE : Ne traite qu'une seule question ou idée à la fois. Si vous débutez, dis "Commençons par répondre à la question 1". Ne laisse pas l'élève sauter des étapes. 
+        5. DONNER DES INDICES SUBTILS : Si l'élève est bloqué, pose des questions ouvertes.
+        6. TOLÉRANCE SUR LA MÉTHODE : N'oblige pas l'élève à utiliser une méthode spécifique si sa méthode mathématique est correcte et mène au bon résultat.
+        7. PROGRESSION : Seulement APRÈS avoir vérifié et validé formellement que la réponse à la question en cours est 100% correcte, félicite-le et suggère explicitement de passer à la question suivante. Si l'élève semble avoir compris, demande-lui d'expliquer avec ses propres mots pour valider sa compréhension.
+        8. TON ET STYLE : Utilise le tutoiement, un ton amical, et reste toujours concis (une idée à la fois).
+        9. FIN DE L'EXERCICE : Quand l'élève a terminé l'exercice (réponse juste et justification suffisante), félicite-le et propose-lui de terminer la session.
+
+        Toutes tes réponses doivent être en français. Utilise la syntaxe classique pour les équations mathématiques.
         """
         
         # Logic to format the history for the API
         processed_messages = []
         for msg in self.client_messages:
             new_msg = {'role': msg['role']}
-            # If the content is a list (potentially with images), keep it as is.
             if isinstance(msg['content'], list):
-                # Ensure the format is correct for the API
                 new_content = []
                 for part in msg['content']:
-                    # Handle the format sent by the frontend {type: 'image_url', url: '...'}
                     if part.get('type') == 'image_url' and 'url' in part:
-                        # Reconstruct the structure expected by the OpenAI API
                         new_content.append({'type': 'image_url', 'image_url': {'url': part['url']}})
                     elif part.get('type') == 'text':
                         new_content.append({'type': 'text', 'text': part['text']})
@@ -358,7 +369,7 @@ class TutorInteractionView(BaseTutorAPIView):
             assistant_reply_text = generate_ai_response(
                 messages=api_messages,
                 model_name=AppConfig.get_active_model(),
-                temperature=0.4
+                temperature=0.3 # Température abaissée pour plus de rigueur analytique tout en gardant l'empathie
             )
 
             assistant_reply_structured = [{"type": "text", "text": assistant_reply_text}]
@@ -398,7 +409,6 @@ class EndSessionView(APIView):
             request.session.pop('exercise_context', None)
             request.session.pop('hint_level', None)
         
-        # Corrected line:
         return Response({'redirect_url': reverse('dashboard:dashboard')}, status=status.HTTP_200_OK)
 
 
