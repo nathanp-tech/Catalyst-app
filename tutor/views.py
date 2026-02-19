@@ -92,29 +92,60 @@ class OpenAIAPIView(APIView):
         super().__init__(**kwargs)
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def extract_pdf_text(doc_file):
-    text = ""
-    try:
-        if doc_file:
-            with doc_file.open('rb') as f:
-                reader = PdfReader(f)
-                for page in reader.pages:
-                    extracted = page.extract_text()
-                    if extracted:
-                        text += extracted + "\n"
-    except Exception as e:
-        print(f"Erreur lecture PDF: {e}")
-    return text
-
 class StartSessionView(LoginRequiredMixin, View):
     """
     Creates a new chat session for a given document and redirects to the tutor page.
     """
     def get(self, request, document_id):
         document = get_object_or_404(Document, pk=document_id)
+        solution_doc = Document.objects.filter(solution_for=document).first()
 
         question_context = f"Exercice: {document.title}"
-        solution_context = "" # On laisse vide pour déclencher le chargement asynchrone
+        solution_context = "No solution provided."
+        
+        # Fonction utilitaire pour extraire le texte d'un PDF
+        def extract_pdf_text(doc_file):
+            text = ""
+            try:
+                if doc_file:
+                    with doc_file.open('rb') as f:
+                        reader = PdfReader(f)
+                        for page in reader.pages:
+                            extracted = page.extract_text()
+                            if extracted:
+                                text += extracted + "\n"
+            except Exception as e:
+                print(f"Erreur lecture PDF: {e}")
+            return text
+
+        if solution_doc and solution_doc.file:
+            # Si un corrigé existe, on essaie de lire son contenu
+            extracted = extract_pdf_text(solution_doc.file)
+            if extracted.strip():
+                solution_context = extracted
+            else:
+                solution_context = f"The solution for the exercise '{solution_doc.title}' is available."
+        else:
+            try:
+                # Sinon, on lit l'énoncé pour le donner à l'IA
+                exercise_content = f"Titre : {document.title}"
+                extracted_text = extract_pdf_text(document.file)
+                if extracted_text.strip():
+                    exercise_content += f"\n\nContenu de l'exercice (extrait du PDF) :\n{extracted_text}"
+
+                solve_prompt = {
+                    "role": "system",
+                    "content": "Tu es un professeur de mathématiques expert. Résous l'exercice suivant de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape. Fournis toutes les équations, les calculs intermédiaires et les justifications logiques. Cette résolution servira de correction de référence absolue."
+                }
+                generated_solution = generate_ai_response(
+                    messages=[solve_prompt, {"role": "user", "content": exercise_content}],
+                    model_name=AppConfig.get_active_model(),
+                    temperature=0.2
+                )
+                solution_context = generated_solution
+            except Exception as e:
+                print(f"Erreur lors de la génération de la correction: {e}")
+                solution_context = "Attention: Correction détaillée non disponible. Le tuteur devra s'appuyer sur ses propres calculs en temps réel."
 
         chat_session = ChatSession.objects.create(
             student=request.user,
@@ -123,6 +154,21 @@ class StartSessionView(LoginRequiredMixin, View):
             solution_context=solution_context
         )
         
+        try:
+            welcome_prompt = {
+                "role": "system",
+                "content": "Tu es un tuteur de maths sympathique. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit l'inviter à commencer spécifiquement par la question 1 (ex: 'Salut ! Prêt à commencer ? Commençons par la question 1...'). Tu tutoies l'élève. Ne donne aucune réponse."
+            }
+            assistant_welcome_text = generate_ai_response(
+                messages=[welcome_prompt, {"role": "user", "content": "Commence la conversation."}],
+                model_name=AppConfig.get_active_model(),
+                temperature=0.5
+            )
+            assistant_welcome_structured = [{"type": "text", "text": assistant_welcome_text}]
+            
+            ChatMessage.objects.create(session=chat_session, role='assistant', content=assistant_welcome_structured)
+        except Exception as e:
+            print(f"Error generating welcome message: {e}")
 
         request.session['chat_session_id'] = chat_session.id
         request.session['exercise_context'] = {
@@ -130,82 +176,6 @@ class StartSessionView(LoginRequiredMixin, View):
             'solution': chat_session.solution_context
         }
         return redirect('tutor-page')
-
-class SessionInitializationView(APIView):
-    """
-    Initializes the session asynchronously: generates solution (if needed) and welcome message.
-    """
-    def post(self, request, *args, **kwargs):
-        session_id = request.session.get('chat_session_id')
-        if not session_id:
-            return Response({"error": "No active session."}, status=400)
-        
-        session = get_object_or_404(ChatSession, id=session_id, student=request.user)
-        
-        # 1. Load or Generate Solution if missing
-        if not session.solution_context:
-            # A. D'abord, on essaie de lire le PDF de correction s'il existe (Déplacé ici pour la perf)
-            solution_doc = Document.objects.filter(solution_for=session.document).first()
-            if solution_doc and solution_doc.file:
-                extracted = extract_pdf_text(solution_doc.file)
-                if extracted.strip():
-                    session.solution_context = extracted
-                    session.save(update_fields=['solution_context'])
-                    # Mise à jour du cache de session
-                    if request.session.get('exercise_context'):
-                        request.session['exercise_context']['solution'] = extracted
-                        request.session.modified = True
-
-            # B. Si toujours pas de solution (pas de PDF ou PDF vide), on génère avec l'IA
-            if not session.solution_context:
-                try:
-                    document = session.document
-                    exercise_content = f"Titre : {document.title}"
-                    extracted_text = extract_pdf_text(document.file)
-                    if extracted_text.strip():
-                        exercise_content += f"\n\nContenu de l'exercice (extrait du PDF) :\n{extracted_text}"
-
-                    solve_prompt = {
-                        "role": "system",
-                        "content": "Tu es un professeur de mathématiques expert. Résous l'exercice suivant de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape. Fournis toutes les équations, les calculs intermédiaires et les justifications logiques. Cette résolution servira de correction de référence absolue."
-                    }
-                    generated_solution = generate_ai_response(
-                        messages=[solve_prompt, {"role": "user", "content": exercise_content}],
-                        model_name=AppConfig.get_active_model(),
-                        temperature=0.2
-                    )
-                    session.solution_context = generated_solution
-                    session.save(update_fields=['solution_context'])
-                    
-                    # Update session cache
-                    if request.session.get('exercise_context'):
-                        request.session['exercise_context']['solution'] = generated_solution
-                        request.session.modified = True
-                except Exception as e:
-                    print(f"Erreur génération solution: {e}")
-
-        # 2. Generate Welcome Message (if not exists)
-        if not session.messages.exists():
-            try:
-                welcome_prompt = {
-                    "role": "system",
-                    "content": "Tu es un tuteur de maths sympathique. Tu t'apprêtes à commencer un exercice avec un élève. Ton premier message doit l'inviter à commencer spécifiquement par la question 1 (ex: 'Salut ! Prêt à commencer ? Commençons par la question 1...'). Tu tutoies l'élève. Ne donne aucune réponse."
-                }
-                assistant_welcome_text = generate_ai_response(
-                    messages=[welcome_prompt, {"role": "user", "content": "Commence la conversation."}],
-                    model_name=AppConfig.get_active_model(),
-                    temperature=0.5
-                )
-                assistant_welcome_structured = [{"type": "text", "text": assistant_welcome_text}]
-                
-                ChatMessage.objects.create(session=session, role='assistant', content=assistant_welcome_structured)
-                
-                return Response({"welcome_message": assistant_welcome_structured}, status=200)
-            except Exception as e:
-                print(f"Error generating welcome message: {e}")
-                return Response({"error": "Error generating welcome message"}, status=500)
-        
-        return Response({"status": "already_initialized"}, status=200)
 
 class TutorImageAnalysisView(OpenAIAPIView):
     """

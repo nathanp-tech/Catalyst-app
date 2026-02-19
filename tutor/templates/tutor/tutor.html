@@ -431,7 +431,6 @@
 <script>
     window.APP_CONFIG = {
         analyzeImageUrl: "{% url 'tutor-analyze-image' %}",
-        initSessionUrl: "{% url 'tutor-init-session' %}",
         endSessionUrl: "{% url 'end-session' %}",
         tutorInteractUrl: "{% url 'tutor-interact' %}",
         saveWhiteboardUrl: "{% url 'save-whiteboard' %}",
@@ -449,58 +448,6 @@
 </script>
 
 <script src="{% static 'tutor/tutor.js' %}" defer></script>
-
-<script>
-    // Script d'initialisation asynchrone de la session (Welcome Message)
-    document.addEventListener('DOMContentLoaded', function() {
-        const sessionData = JSON.parse(document.getElementById('session-data').textContent);
-        const chatbox = document.getElementById('chatbox');
-
-        // Si c'est une nouvelle session (pas d'historique), on lance l'initialisation
-        if (sessionData.ongoing_session && (!sessionData.initial_chat_history || sessionData.initial_chat_history.length === 0)) {
-            // 1. Afficher le message de chargement
-            const loadingId = 'init-loading-msg';
-            const loadingHtml = `
-                <div id="${loadingId}" class="chat-message tutor">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <div class="spinner" style="width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                        <span>Le tuteur prépare l'exercice...</span>
-                    </div>
-                </div>
-                <style>@keyframes spin {0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);}}</style>
-            `;
-            chatbox.innerHTML = loadingHtml;
-
-            // 2. Appeler l'API pour générer le message de bienvenue
-            fetch(window.APP_CONFIG.initSessionUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': window.APP_CONFIG.csrfToken
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                const loadingEl = document.getElementById(loadingId);
-                if (loadingEl) loadingEl.remove();
-
-                if (data.welcome_message) {
-                    // Ajouter le message de bienvenue
-                    const msgContent = data.welcome_message[0].text;
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = 'chat-message tutor';
-                    msgDiv.innerHTML = msgContent.replace(/\n/g, '<br>');
-                    chatbox.appendChild(msgDiv);
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                const loadingEl = document.getElementById(loadingId);
-                if (loadingEl) loadingEl.innerHTML = "Erreur lors du chargement du tuteur.";
-            });
-        }
-    });
-</script>
 
 <script>
     // Script spécifique pour le redimensionnement du whiteboard
