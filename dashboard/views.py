@@ -383,10 +383,42 @@ class SessionChatContentView(LoginRequiredMixin, View):
             ChatSession.objects.prefetch_related('messages'),
             id=session_id
         )
+        
+        # Prepare messages for the template
+        formatted_messages = []
+        for msg in session.messages.order_by('timestamp'):
+            content_data = msg.content
+            # Handle potential string serialization of JSON
+            if isinstance(content_data, str):
+                try:
+                    content_data = json.loads(content_data)
+                except json.JSONDecodeError:
+                    content_data = [{"type": "text", "text": content_data}]
+            
+            if not isinstance(content_data, list):
+                 content_data = [{"type": "text", "text": str(content_data)}]
+
+            processed_content = []
+            for item in content_data:
+                if item.get('type') == 'text':
+                    text = item.get('text', '')
+                    # Fix LaTeX formatting bug where '\' became '||'
+                    text = text.replace('||', '\\')
+                    processed_content.append({'type': 'text', 'text': text})
+                elif item.get('type') == 'image_url':
+                    url = item.get('url') or item.get('image_url', {}).get('url')
+                    if url:
+                        processed_content.append({'type': 'image', 'url': url})
+            
+            formatted_messages.append({
+                'role': msg.role,
+                'content': processed_content,
+            })
+
         # Use a partial template to render only the chat
         html_content = render_to_string(
             'dashboard/partials/chat_content.html', 
-            {'session': session, 'is_pdf_render': True}
+            {'session': session, 'chat_messages': formatted_messages, 'is_pdf_render': True}
         )
         return JsonResponse({'html': html_content})
 

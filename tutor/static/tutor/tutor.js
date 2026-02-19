@@ -31,6 +31,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomResetBtn = document.getElementById('zoomResetBtn');
     const questionZoomPercent = document.getElementById('questionZoomPercent');
     const whiteboardWorkspace = document.querySelector('.workspace-panel') || document.querySelector('.whiteboard-workspace');
+    const lightbox = document.getElementById('imageLightbox');
+    const lightboxImg = document.getElementById('lightboxImage');
+    const resizeHandle = document.getElementById('resizeHandle');
+    const workspacePanel = document.querySelector('.workspace-panel');
+    const toggleWhiteboardSizeBtn = document.getElementById('toggleWhiteboardSizeBtn');
+    const questionFullscreenBtn = document.getElementById('questionFullscreenBtn');
     
     // --- CONSTANTS ---
     const TOOLS = {
@@ -63,6 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let totalPages = 1;
     let questionZoomLevel = 1;
     let saveInterval = null;
+    let isResizingWorkspace = false;
+    let lastSplitRatio = 50; // Pourcentage par défaut pour le panneau du haut
 
     // --- CONFIGURATION ---
     if (typeof pdfjsLib !== 'undefined') {
@@ -86,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function initialize() {
         attachEventListeners();
         setupWhiteboard();
+        setupResizer();
         if (sessionData.ongoing_session) {
             restoreSession().then(() => {
                 if (chatHistory.length === 0) {
@@ -199,6 +208,66 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ===================================================================
+    // ===             WORKSPACE RESIZING LOGIC                      ===
+    // ===================================================================
+
+    function setupResizer() {
+        if (!resizeHandle || !workspacePanel || !questionCard || !document.getElementById('whiteboardContainer')) return;
+
+        const whiteboardContainer = document.getElementById('whiteboardContainer');
+
+        resizeHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Empêche la sélection de texte
+            isResizingWorkspace = true;
+            resizeHandle.classList.add('active');
+            document.body.style.cursor = 'row-resize';
+            
+            // Désactiver temporairement les événements de souris sur le canvas et les iframes pour fluidifier le drag
+            whiteboardContainer.style.pointerEvents = 'none';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isResizingWorkspace) return;
+
+            const containerRect = workspacePanel.getBoundingClientRect();
+            // Calculer la position relative de la souris dans le conteneur
+            let relativeY = e.clientY - containerRect.top;
+            
+            // Convertir en pourcentage
+            let percentage = (relativeY / containerRect.height) * 100;
+
+            // Limites (min 0% pour cacher la question, max 90% pour garder un peu de whiteboard)
+            percentage = Math.max(0, Math.min(90, percentage));
+
+            applySplitRatio(percentage);
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isResizingWorkspace) {
+                isResizingWorkspace = false;
+                resizeHandle.classList.remove('active');
+                document.body.style.cursor = '';
+                whiteboardContainer.style.pointerEvents = ''; // Réactiver les événements
+                resizeCanvas(); // Ajustement final propre
+            }
+        });
+    }
+
+    function applySplitRatio(percentage) {
+        if (!questionCard || !document.getElementById('whiteboardContainer')) return;
+        
+        lastSplitRatio = percentage;
+        
+        // Utiliser flex-basis pour un redimensionnement fluide
+        questionCard.style.flex = `0 0 ${percentage}%`;
+        // Le whiteboard prend le reste
+        document.getElementById('whiteboardContainer').style.flex = `1 1 ${100 - percentage}%`;
+        
+        // Important : Redimensionner le canvas FabricJS car la div a changé de taille
+        resizeCanvas();
+    }
+
+    // ===================================================================
     // ===             WHITEBOARD MANAGEMENT (FABRIC.JS)             ===
     // ===================================================================
 
@@ -225,10 +294,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Palm Rejection ---
         fabricCanvas.on('mouse:down:before', function(opt) {
-            // If the tool is a drawing tool and the event is a touch event,
-            // temporarily disable drawing mode.
-            if (fabricCanvas.isDrawingMode && opt.e.pointerType === 'touch') {
-                fabricCanvas.isDrawingMode = false;
+            if (!opt.e) return;
+            const evt = opt.e;
+            // Only apply palm rejection logic if we are in a drawing mode (Pen or Eraser)
+            if (whiteboardState.tool === TOOLS.PEN || whiteboardState.tool === TOOLS.ERASER) {
+                if (evt.pointerType === 'touch') {
+                    // Disable drawing for touch (finger/palm)
+                    fabricCanvas.isDrawingMode = false;
+                } else if (evt.pointerType === 'pen' || evt.pointerType === 'mouse') {
+                    // Enable drawing for pen or mouse (desktop)
+                    // This ensures that if the palm disabled it, the pen re-enables it immediately
+                    fabricCanvas.isDrawingMode = true;
+                }
             }
         });
         fabricCanvas.on('mouse:up', () => setTool(whiteboardState.tool));
@@ -319,12 +396,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return fabricCanvas.toDataURL({ format: 'png', quality: 1.0 });
     }
     
-    function toggleFullscreen() {
+    function toggleFullscreen(element) {
         if (!document.fullscreenElement) {
-            if (whiteboardWorkspace.requestFullscreen) {
-                whiteboardWorkspace.requestFullscreen();
-            } else if (whiteboardWorkspace.webkitRequestFullscreen) { /* Safari */
-                whiteboardWorkspace.webkitRequestFullscreen();
+            if (element.requestFullscreen) {
+                element.requestFullscreen();
+            } else if (element.webkitRequestFullscreen) { /* Safari */
+                element.webkitRequestFullscreen();
+            }
+            
+            // Si on met tout le workspace en plein écran, on réapplique le ratio
+            if (element === whiteboardWorkspace) {
+                setTimeout(() => {
+                    applySplitRatio(lastSplitRatio);
+                }, 100);
             }
         } else {
             if (document.exitFullscreen) {
@@ -334,14 +418,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function handleFullscreenChange() {
-        const icon = fullscreenBtn.querySelector('i');
-        if (document.fullscreenElement) {
-            // We are in fullscreen
-            icon.className = 'fas fa-compress';
-            questionCard.classList.add('in-fullscreen');
-        } else {
-            questionCard.classList.remove('in-fullscreen');
-            icon.className = 'fas fa-expand';
+        // Gestion icône Workspace (Brouillon + Question)
+        if (fullscreenBtn) {
+            const icon = fullscreenBtn.querySelector('i');
+            if (document.fullscreenElement === whiteboardWorkspace) {
+                icon.className = 'fas fa-compress';
+            } else {
+                icon.className = 'fas fa-expand';
+            }
+        }
+        // Gestion icône Question seule
+        if (questionFullscreenBtn) {
+            const icon = questionFullscreenBtn.querySelector('i');
+            if (document.fullscreenElement === questionCard) {
+                icon.className = 'fas fa-compress';
+            } else {
+                icon.className = 'fas fa-expand';
+            }
         }
     }
 
@@ -487,7 +580,11 @@ document.addEventListener('DOMContentLoaded', () => {
         sendBtn.disabled = true;
         let userMessageContent = [];
         if (textComment) userMessageContent.push({ type: 'text', text: textComment });
-        if (preparedImage) userMessageContent.push({ type: 'image_url', url: preparedImage });
+        if (preparedImage) userMessageContent.push({ 
+            type: 'image_url', 
+            url: preparedImage,
+            whiteboard_state: fabricCanvas.toJSON() // Sauvegarde l'état pour restauration future
+        });
         if (attachedImage) userMessageContent.push({ type: 'image_url', url: attachedImage });
 
         const userMsg = { role: 'user', content: userMessageContent };
@@ -536,20 +633,55 @@ document.addEventListener('DOMContentLoaded', () => {
     function createMessageElement(msg) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `chat-message ${msg.role === 'assistant' ? 'tutor' : 'user'}`;
-        let contentHTML = '';
+        
         if (Array.isArray(msg.content)) {
             msg.content.forEach(item => {
                 if (item.type === 'text') {
-                    contentHTML += `<div class="comment-text">${item.text}</div>`;
+                    const textDiv = document.createElement('div');
+                    textDiv.className = 'comment-text';
+                    textDiv.style.whiteSpace = 'pre-wrap';
+                    textDiv.textContent = item.text;
+                    messageDiv.appendChild(textDiv);
                 }
                 if (item.type === 'image_url') {
-                    contentHTML += `<img src="${item.url || item.image_url.url}" alt="Réponse de l'élève">`;
+                    const imgUrl = item.url || (item.image_url ? item.image_url.url : '');
+                    
+                    if (item.whiteboard_state) {
+                        // Création du wrapper pour l'image et le bouton de restauration
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'whiteboard-wrapper';
+                        
+                        const img = document.createElement('img');
+                        img.src = imgUrl;
+                        img.alt = "Image";
+                        img.className = "chat-image";
+                        
+                        const btn = document.createElement('button');
+                        btn.className = 'restore-whiteboard-btn';
+                        btn.title = "Reprendre ce brouillon";
+                        btn.innerHTML = '<i class="fas fa-pen"></i>';
+                        btn.onclick = (e) => {
+                            e.stopPropagation(); // Empêche l'ouverture de la lightbox
+                            if (confirm("Voulez-vous remplacer votre brouillon actuel par celui-ci ?")) {
+                                fabricCanvas.loadFromJSON(item.whiteboard_state, fabricCanvas.renderAll.bind(fabricCanvas));
+                            }
+                        };
+                        
+                        wrapper.appendChild(img);
+                        wrapper.appendChild(btn);
+                        messageDiv.appendChild(wrapper);
+                    } else {
+                        const img = document.createElement('img');
+                        img.src = imgUrl;
+                        img.alt = "Image";
+                        img.className = "chat-image";
+                        messageDiv.appendChild(img);
+                    }
                 }
             });
         } else {
-            contentHTML = msg.content;
+            messageDiv.innerHTML = msg.content;
         }
-        messageDiv.innerHTML = contentHTML;
         return messageDiv;
     }
 
@@ -650,27 +782,28 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- INJECT "SEE SOLUTION" BUTTON ---
             const showSolutionBtn = document.createElement('button');
             showSolutionBtn.id = 'showSolutionBtn';
-            showSolutionBtn.innerHTML = '<i class="fas fa-key"></i> Voir la correction';
+            showSolutionBtn.innerHTML = '<i class="fas fa-key"></i>';
+            showSolutionBtn.title = "Voir la correction";
             // Style similar to other action buttons but distinct
             showSolutionBtn.style.cssText = `
-                margin-top: 10px;
-                width: 100%;
-                padding: 12px;
-                background-color: #6c757d;
-                color: white;
+                width: 36px;
+                height: 36px;
+                background-color: #fff9c4;
+                color: #fbc02d;
                 border: none;
-                border-radius: 8px;
+                border-radius: 50%;
                 cursor: pointer;
-                font-weight: 600;
-                display: flex; align-items: center; justify-content: center; gap: 8px;
-                transition: background 0.2s;
+                display: flex; align-items: center; justify-content: center;
+                transition: all 0.2s;
+                font-size: 1rem;
             `;
-            showSolutionBtn.onmouseover = () => showSolutionBtn.style.backgroundColor = '#5a6268';
-            showSolutionBtn.onmouseout = () => showSolutionBtn.style.backgroundColor = '#6c757d';
+            showSolutionBtn.onmouseover = () => { showSolutionBtn.style.transform = 'scale(1.1)'; showSolutionBtn.style.backgroundColor = '#fff59d'; };
+            showSolutionBtn.onmouseout = () => { showSolutionBtn.style.transform = 'scale(1)'; showSolutionBtn.style.backgroundColor = '#fff9c4'; };
             
             showSolutionBtn.addEventListener('click', fetchAndShowSolution);
             
-            endExerciseBtn.parentNode.insertBefore(showSolutionBtn, endExerciseBtn.nextSibling);
+            // Insert before the end button to keep them grouped
+            endExerciseBtn.parentNode.insertBefore(showSolutionBtn, endExerciseBtn);
         }
         if (sendBtn) sendBtn.addEventListener('click', sendToTutor);
         
@@ -713,7 +846,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (colorPicker) colorPicker.addEventListener('input', () => setColor(colorPicker.value));
         if (sizeSlider) sizeSlider.addEventListener('input', () => setSize(sizeSlider.value));
         if (clearCanvasBtn) clearCanvasBtn.addEventListener('click', clearCanvas);
-        if (fullscreenBtn) fullscreenBtn.addEventListener('click', toggleFullscreen);
+        if (fullscreenBtn) fullscreenBtn.addEventListener('click', () => toggleFullscreen(whiteboardWorkspace));
+        if (questionFullscreenBtn) questionFullscreenBtn.addEventListener('click', () => toggleFullscreen(questionCard));
         document.addEventListener('fullscreenchange', handleFullscreenChange);
         document.addEventListener('webkitfullscreenchange', handleFullscreenChange); // For Safari
         
@@ -721,6 +855,36 @@ document.addEventListener('DOMContentLoaded', () => {
         if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => updateQuestionZoom(questionZoomLevel - 0.2));
         if (zoomResetBtn) zoomResetBtn.addEventListener('click', () => updateQuestionZoom(1));
         
+        // Lightbox events
+        if (chatbox) {
+            chatbox.addEventListener('click', (e) => {
+                if (e.target.tagName === 'IMG' && e.target.classList.contains('chat-image')) {
+                    if (lightbox && lightboxImg) {
+                        lightboxImg.src = e.target.src;
+                        lightbox.classList.add('active');
+                    }
+                }
+            });
+        }
+        if (lightbox) {
+            lightbox.addEventListener('click', () => lightbox.classList.remove('active'));
+        }
+
+        // Logic for Expand/Reduce Whiteboard Button
+        if (toggleWhiteboardSizeBtn) {
+            toggleWhiteboardSizeBtn.addEventListener('click', () => {
+                // Si la question prend moins de 10%, c'est que le whiteboard est déjà agrandi (Max)
+                const isExpanded = lastSplitRatio < 10;
+                
+                if (isExpanded) {
+                    applySplitRatio(75); // Réduire : Question 75%, Whiteboard 25% (Min)
+                    toggleWhiteboardSizeBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Agrandir';
+                } else {
+                    applySplitRatio(5); // Agrandir : Question 5%, Whiteboard 95% (Max)
+                    toggleWhiteboardSizeBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Réduire';
+                }
+            });
+        }
     }
     
     async function fetchAndShowSolution() {
