@@ -32,7 +32,14 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-1tcszmj%u1&s-#28er1o4
 # Set DEBUG to False in production
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '172.20.10.9', 'nathanptech.pythonanywhere.com']
+ALLOWED_HOSTS = [
+    '127.0.0.1', 
+    'localhost', 
+    '172.20.10.9', 
+    'nathanptech.pythonanywhere.com',
+    'www.catalyst-teaching.com',
+    'catalyst-teaching.com'
+]
 
 # Add external hostnames from environment variable (comma separated)
 EXTERNAL_HOSTS = os.environ.get('ALLOWED_HOSTS')
@@ -166,7 +173,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CORS_ALLOW_ALL_ORIGINS = True
 
 # CSRF Configuration for production
-CSRF_TRUSTED_ORIGINS = ['https://nathanptech.pythonanywhere.com']
+CSRF_TRUSTED_ORIGINS = [
+    'https://nathanptech.pythonanywhere.com',
+    'https://www.catalyst-teaching.com',
+    'https://catalyst-teaching.com'
+]
 
 # Media files configuration (uploads)
 MEDIA_URL = '/media/'
