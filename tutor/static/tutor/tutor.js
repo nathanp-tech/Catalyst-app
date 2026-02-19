@@ -87,7 +87,11 @@ document.addEventListener('DOMContentLoaded', () => {
         attachEventListeners();
         setupWhiteboard();
         if (sessionData.ongoing_session) {
-            restoreSession();
+            restoreSession().then(() => {
+                if (chatHistory.length === 0) {
+                    initializeAISession();
+                }
+            });
         }
     }
 
@@ -123,6 +127,40 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } else {
             alert("No previous submission to restore.");
+        }
+    }
+
+    async function initializeAISession() {
+        displayLoadingIndicator();
+        const loadingText = chatbox.querySelector('.loading-indicator span');
+        if (loadingText) loadingText.textContent = "L'IA prépare la séance...";
+
+        try {
+            const res = await fetch(window.APP_CONFIG.initSessionUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': window.APP_CONFIG.csrfToken
+                }
+            });
+
+            removeLoadingIndicator();
+
+            if (!res.ok) throw new Error('Erreur lors de l\'initialisation');
+
+            const data = await res.json();
+            if (data.initial_history && data.initial_history.length > 0) {
+                data.initial_history.forEach(msg => {
+                    chatHistory.push(msg);
+                    appendMessage(msg);
+                });
+            }
+        } catch (error) {
+            console.error("Error initializing session:", error);
+            removeLoadingIndicator();
+            const errorMsg = { role: 'assistant', content: [{"type": "text", "text": "Une erreur est survenue lors du démarrage. Veuillez rafraîchir la page."}] };
+            chatHistory.push(errorMsg);
+            appendMessage(errorMsg);
         }
     }
 
@@ -535,7 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!chatbox) return;
         const loadingDiv = document.createElement('div');
         loadingDiv.className = 'chat-message tutor loading-indicator';
-        loadingDiv.innerHTML = `<span>Le tuteur réfléchit...</span>`;
+        loadingDiv.innerHTML = `<div class="spinner"></div><span>Le tuteur réfléchit...</span>`;
         chatbox.appendChild(loadingDiv);
         if (chatbox.parentElement) chatbox.parentElement.scrollTop = chatbox.parentElement.scrollHeight;
     }

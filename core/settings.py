@@ -179,6 +179,18 @@ CSRF_TRUSTED_ORIGINS = [
     'https://catalyst-teaching.com'
 ]
 
+# Security settings for production
+if not DEBUG:
+    # Cookies sent only over HTTPS
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # HSTS (Force HTTPS for browsers)
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    # Redirect HTTP to HTTPS
+    SECURE_SSL_REDIRECT = True
+
 # Media files configuration (uploads)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
