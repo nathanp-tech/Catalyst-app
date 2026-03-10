@@ -1,10 +1,10 @@
 {
     "class_id": 1,
     "students": [
-        "Jean Dupont",
-        "Marie Curie",
-        "Albert Einstein",
-        "Isaac Newton",
-        "Galilée"
+        {"username": "jdupont"},
+        {"username": "mcurie"},
+        {"username": "aeinstein"},
+        {"username": "inewton"},
+        {"username": "galilee"}
     ]
 }

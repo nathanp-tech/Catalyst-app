@@ -52,17 +52,17 @@ def is_teacher(user):
 @method_decorator(user_passes_test(is_teacher), name='dispatch')
 class BulkCreateStudentsView(LoginRequiredMixin, View):
     """
-    Crée des comptes élèves en masse à partir d'une liste de noms et génère un PDF avec les identifiants.
-    Attend un JSON : {"class_id": 1, "students": ["Nom1", "Nom2", ...]}
+    Crée des comptes élèves en masse à partir d'une liste de noms d'utilisateurs et génère un PDF avec les identifiants.
+    Attend un JSON : {"class_id": 1, "students": [{"username": "user1"}, ...]}
     """
     def post(self, request, *args, **kwargs):
         try:
             data = json.loads(request.body)
             class_id = data.get('class_id')
-            student_names = data.get('students', [])
+            student_data = data.get('students', [])
 
-            if not class_id or not student_names:
-                return JsonResponse({'error': 'Class ID and students list are required.'}, status=400)
+            if not class_id or not student_data:
+                return JsonResponse({'error': "Le JSON doit contenir 'class_id' et une liste 'students' d'objets avec une clé 'username'."}, status=400)
 
             try:
                 target_class = Group.objects.get(id=class_id)
@@ -70,55 +70,95 @@ class BulkCreateStudentsView(LoginRequiredMixin, View):
                 return JsonResponse({'error': 'Class not found.'}, status=404)
 
             User = get_user_model()
-            
+
             # Préparation du PDF
             buffer = io.BytesIO()
             p = canvas.Canvas(buffer, pagesize=A4)
             width, height = A4
             base_url = request.build_absolute_uri('/') # URL racine du site
 
-            for name in student_names:
-                # Génération username (nettoyage simple) et mot de passe
-                base_username = "".join(c for c in name if c.isalnum()).lower()
-                if not base_username: base_username = "eleve"
-                
-                username = base_username
-                counter = 1
-                while User.objects.filter(username=username).exists():
-                    username = f"{base_username}{counter}"
-                    counter += 1
-                
+            for student_info in student_data:
+                username = student_info.get('username')
+                if not username:
+                    continue # On ignore les entrées sans username
+
+                # Si l'utilisateur existe déjà, on l'ignore pour ne pas bloquer la création en masse
+                if User.objects.filter(username=username).exists():
+                    continue
+
                 password = User.objects.make_random_password(length=8)
-                
+
                 # Création du compte
                 user = User.objects.create_user(username=username, password=password)
                 user.groups.add(target_class)
 
-                # --- Génération de la page PDF ---
+                # --- Génération PDF sur une seule page ---
+            
+                # En-tête commun
                 p.setFont("Helvetica-Bold", 20)
-                p.drawCentredString(width / 2, height - 3 * cm, "Bienvenue sur Catalyst !")
-                
+                p.drawCentredString(width / 2, height - 2.5 * cm, "Bienvenue sur Catalyst !")
                 p.setFont("Helvetica", 14)
-                p.drawCentredString(width / 2, height - 4.5 * cm, f"Classe : {target_class.name}")
+                p.drawCentredString(width / 2, height - 3.5 * cm, f"Classe : {target_class.name}")
+                p.setStrokeColorRGB(0.8, 0.8, 0.8)
+                p.line(2 * cm, height - 4.2 * cm, width - 2 * cm, height - 4.2 * cm) # Ligne horizontale
+
+                # --- Partie gauche : Accès ---
+                left_col_x = 3 * cm
                 
-                p.setFont("Helvetica", 12)
-                p.drawString(3 * cm, height - 7 * cm, f"Bonjour {name}, voici tes accès :")
-                
-                # Cadre identifiants
-                p.rect(3 * cm, height - 11 * cm, width - 6 * cm, 3 * cm)
                 p.setFont("Helvetica-Bold", 16)
-                p.drawString(4 * cm, height - 9 * cm, f"Identifiant : {username}")
-                p.drawString(4 * cm, height - 10 * cm, f"Mot de passe : {password}")
+                p.drawString(left_col_x, height - 6 * cm, "Tes informations de connexion")
+                p.setFont("Helvetica", 12)
+                p.drawString(left_col_x, height - 7.5 * cm, f"Identifiant : {username}")
+                p.drawString(left_col_x, height - 8.5 * cm, f"Mot de passe : {password}")
+
+                # --- Partie droite : Guide de démarrage ---
+                right_col_x = width / 2 + 0.5 * cm
                 
-                # QR Code
+                p.setFont("Helvetica-Bold", 16)
+                p.drawString(right_col_x, height - 6 * cm, "Guide de Démarrage")
+
+                text = p.beginText(right_col_x, height - 7.5 * cm)
+                text.setFont("Helvetica-Bold", 12)
+                text.setLeading(16)
+                text.textLine("1. Choisir un exercice")
+                text.setFont("Helvetica", 10)
+                text.textLine("   Connecte-toi, choisis un chapitre, puis")
+                text.textLine("   clique sur un exercice pour commencer.")
+                text.textLine("")
+
+                text.setFont("Helvetica-Bold", 12)
+                text.textLine("2. Discuter avec l'IA")
+                text.setFont("Helvetica", 10)
+                text.textLine("   L'IA est ton tuteur personnel. Elle te")
+                text.textLine("   guide pas à pas. N'hésite pas à lui")
+                text.textLine("   montrer ton travail sur le brouillon.")
+                text.textLine("")
+
+                text.setFont("Helvetica-Bold", 12)
+                text.textLine("3. Terminer la session")
+                text.setFont("Helvetica", 10)
+                text.textLine("   Quand tu as fini, clique sur le bouton")
+                text.textLine("   'Terminer la session'.")
+                text.textLine("")
+                
+                text.setFont("Helvetica-Bold", 12)
+                text.textLine("4. Donner ton avis (Important !)")
+                text.setFont("Helvetica", 10)
+                text.textLine("   Après quelques sessions, un questionnaire")
+                text.textLine("   apparaîtra. Tes réponses sont cruciales")
+                text.textLine("   pour améliorer l'outil.")
+                p.drawText(text)
+
+                # --- QR Code en bas au centre ---
                 qr = qrcode.make(base_url)
                 qr_buffer = io.BytesIO()
                 qr.save(qr_buffer, format='PNG')
                 qr_buffer.seek(0)
-                p.drawImage(ImageReader(qr_buffer), (width - 6 * cm) / 2, height - 18 * cm, width=6 * cm, height=6 * cm)
-                
+                qr_size = 6 * cm
+                p.drawImage(ImageReader(qr_buffer), (width - qr_size) / 2, 3 * cm, width=qr_size, height=qr_size)
                 p.setFont("Helvetica", 10)
-                p.drawCentredString(width / 2, height - 19 * cm, f"Accède à l'application : {base_url}")
+                p.drawCentredString(width / 2, 2.5 * cm, "Scanne ce code pour accéder au site")
+                p.drawCentredString(width / 2, 2 * cm, base_url)
                 
                 p.showPage() # Nouvelle page pour le prochain élève
 

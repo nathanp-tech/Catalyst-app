@@ -12,7 +12,7 @@ from reportlab.lib.units import cm
 from reportlab.lib.utils import ImageReader
 
 class Command(BaseCommand):
-    help = "Crée des élèves depuis un JSON et génère un PDF avec les identifiants."
+    help = "Crée des élèves depuis un JSON (contenant des usernames) et génère un PDF avec les identifiants."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -48,10 +48,10 @@ class Command(BaseCommand):
                 return
 
         class_id = data.get('class_id')
-        student_names = data.get('students', [])
+        student_data = data.get('students', [])
 
-        if not class_id or not student_names:
-            self.stdout.write(self.style.ERROR("Le JSON doit contenir 'class_id' et une liste 'students'."))
+        if not class_id or not student_data:
+            self.stdout.write(self.style.ERROR("Le JSON doit contenir 'class_id' et une liste 'students' d'objets avec une clé 'username'."))
             return
 
         try:
@@ -70,57 +70,96 @@ class Command(BaseCommand):
         c = canvas.Canvas(str(output_path), pagesize=A4)
         width, height = A4
 
-        self.stdout.write(f"Création de {len(student_names)} élèves pour la classe '{target_class.name}'...")
+        self.stdout.write(f"Création de {len(student_data)} élèves pour la classe '{target_class.name}'...")
 
-        for name in student_names:
-            # Génération username
-            base_username = "".join(c for c in name if c.isalnum()).lower()
-            if not base_username: base_username = "eleve"
-            
-            username = base_username
-            counter = 1
-            while User.objects.filter(username=username).exists():
-                username = f"{base_username}{counter}"
-                counter += 1
+        for student_info in student_data:
+            username = student_info.get('username')
+            if not username:
+                self.stdout.write(self.style.WARNING("  [SKIP] Entrée élève sans 'username' ignorée."))
+                continue
+
+            # On vérifie si l'utilisateur existe déjà et on passe au suivant si c'est le cas.
+            if User.objects.filter(username=username).exists():
+                self.stdout.write(self.style.WARNING(f"  [SKIP] L'utilisateur {username} existe déjà."))
+                continue
             
             # Génération mot de passe
             password = User.objects.make_random_password(length=8)
             
             # Création User
-            if not User.objects.filter(username=username).exists():
-                user = User.objects.create_user(username=username, password=password)
-                user.groups.add(target_class)
-                self.stdout.write(f"  [OK] Utilisateur créé : {username} ({name})")
-            else:
-                self.stdout.write(f"  [SKIP] L'utilisateur {username} existe déjà.")
+            user = User.objects.create_user(username=username, password=password)
+            user.groups.add(target_class)
+            self.stdout.write(f"  [OK] Utilisateur créé : {username}")
 
-            # --- Génération page PDF ---
+            # --- Génération PDF sur une seule page ---
+            
+            # En-tête commun
             c.setFont("Helvetica-Bold", 20)
-            c.drawCentredString(width / 2, height - 3 * cm, "Bienvenue sur Catalyst !")
-            
+            c.drawCentredString(width / 2, height - 2.5 * cm, "Bienvenue sur Catalyst !")
             c.setFont("Helvetica", 14)
-            c.drawCentredString(width / 2, height - 4.5 * cm, f"Classe : {target_class.name}")
+            c.drawCentredString(width / 2, height - 3.5 * cm, f"Classe : {target_class.name}")
+            c.setStrokeColorRGB(0.8, 0.8, 0.8)
+            c.line(2 * cm, height - 4.2 * cm, width - 2 * cm, height - 4.2 * cm) # Ligne horizontale
+
+            # --- Partie gauche : Accès ---
+            left_col_x = 3 * cm
             
-            c.setFont("Helvetica", 12)
-            c.drawString(3 * cm, height - 7 * cm, f"Bonjour {name}, voici tes accès :")
-            
-            # Cadre identifiants
-            c.rect(3 * cm, height - 11 * cm, width - 6 * cm, 3 * cm)
             c.setFont("Helvetica-Bold", 16)
-            c.drawString(4 * cm, height - 9 * cm, f"Identifiant : {username}")
-            c.drawString(4 * cm, height - 10 * cm, f"Mot de passe : {password}")
+            c.drawString(left_col_x, height - 6 * cm, "Tes informations de connexion")
+            c.setFont("Helvetica", 12)
+            c.drawString(left_col_x, height - 7.5 * cm, f"Identifiant : {username}")
+            c.drawString(left_col_x, height - 8.5 * cm, f"Mot de passe : {password}")
+
+            # --- Partie droite : Guide de démarrage ---
+            right_col_x = width / 2 + 0.5 * cm
             
-            # QR Code
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(right_col_x, height - 6 * cm, "Guide de Démarrage")
+
+            text = c.beginText(right_col_x, height - 7.5 * cm)
+            text.setFont("Helvetica-Bold", 12)
+            text.setLeading(16)
+            text.textLine("1. Choisir un exercice")
+            text.setFont("Helvetica", 10)
+            text.textLine("   Connecte-toi, choisis un chapitre, puis")
+            text.textLine("   clique sur un exercice pour commencer.")
+            text.textLine("")
+
+            text.setFont("Helvetica-Bold", 12)
+            text.textLine("2. Discuter avec l'IA")
+            text.setFont("Helvetica", 10)
+            text.textLine("   L'IA est ton tuteur personnel. Elle te")
+            text.textLine("   guide pas à pas. N'hésite pas à lui")
+            text.textLine("   montrer ton travail sur le brouillon.")
+            text.textLine("")
+
+            text.setFont("Helvetica-Bold", 12)
+            text.textLine("3. Terminer la session")
+            text.setFont("Helvetica", 10)
+            text.textLine("   Quand tu as fini, clique sur le bouton")
+            text.textLine("   'Terminer la session'.")
+            text.textLine("")
+            
+            text.setFont("Helvetica-Bold", 12)
+            text.textLine("4. Donner ton avis (Important !)")
+            text.setFont("Helvetica", 10)
+            text.textLine("   Après quelques sessions, un questionnaire")
+            text.textLine("   apparaîtra. Tes réponses sont cruciales")
+            text.textLine("   pour améliorer l'outil.")
+            c.drawText(text)
+
+            # --- QR Code en bas au centre ---
             qr = qrcode.make(base_url)
             qr_buffer = io.BytesIO()
             qr.save(qr_buffer, format='PNG')
             qr_buffer.seek(0)
-            c.drawImage(ImageReader(qr_buffer), (width - 6 * cm) / 2, height - 18 * cm, width=6 * cm, height=6 * cm)
-            
+            qr_size = 6 * cm
+            c.drawImage(ImageReader(qr_buffer), (width - qr_size) / 2, 3 * cm, width=qr_size, height=qr_size)
             c.setFont("Helvetica", 10)
-            c.drawCentredString(width / 2, height - 19 * cm, f"Accède à l'application : {base_url}")
-            
-            c.showPage()
+            c.drawCentredString(width / 2, 2.5 * cm, "Scanne ce code pour accéder au site")
+            c.drawCentredString(width / 2, 2 * cm, base_url)
+
+            c.showPage() # Terminer la page pour cet élève
 
         c.save()
         self.stdout.write(self.style.SUCCESS(f"Terminé ! Le PDF a été généré ici : {output_path}"))
