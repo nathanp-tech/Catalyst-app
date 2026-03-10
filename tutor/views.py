@@ -75,6 +75,11 @@ class TutorPageView(TemplateView):
                         'title': session.document.title,
                         'url': session.document.file.url
                     })
+                elif self.request.session.get('current_exercise_image'):
+                    context['exercise_document_json'] = json.dumps({
+                        'title': "Exercice importé",
+                        'url': self.request.session.get('current_exercise_image')
+                    })
                 if session.whiteboard_state:
                     context['whiteboard_state_json'] = json.dumps(session.whiteboard_state)
 
@@ -241,6 +246,11 @@ class TutorImageAnalysisView(OpenAIAPIView):
             )
             request.session['chat_session_id'] = chat_session.id
             request.session['exercise_context'] = {'question': question, 'solution': solution}
+            
+            if not document_url and image_base64:
+                request.session['current_exercise_image'] = f"data:image/png;base64,{image_base64}"
+            else:
+                request.session.pop('current_exercise_image', None)
 
             welcome_prompt = {
                 "role": "system",
@@ -426,6 +436,7 @@ class EndSessionView(APIView):
             request.session.pop('chat_session_id', None)
             request.session.pop('exercise_context', None)
             request.session.pop('hint_level', None)
+            request.session.pop('current_exercise_image', None)
         
         return Response({'redirect_url': reverse('dashboard:dashboard')}, status=status.HTTP_200_OK)
 

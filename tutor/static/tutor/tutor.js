@@ -122,6 +122,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const documentUrl = sessionData.exercise_document.url;
             if (documentUrl.toLowerCase().endsWith('.pdf')) {
                 await loadPdfAsImage(documentUrl, 1); // Load the first page
+            } else {
+                // Si ce n'est pas un PDF, on suppose que c'est une image (ou base64)
+                if (questionImageDisplay) questionImageDisplay.src = documentUrl;
             }
             if (sendBtn) sendBtn.disabled = false;
 
@@ -958,9 +961,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const reader = new FileReader();
                 reader.onload = async (event) => {
                     const capturedImageBase64 = event.target.result.split(',')[1]; // Récupérer la partie base64
-                    displayLoadingIndicator();
-                    const loadingText = chatbox.querySelector('.loading-indicator span');
-                    if (loadingText) loadingText.textContent = "Analyse de l'image...";
+                    
+                    // Feedback visuel sur le bouton car chatbox n'existe pas encore
+                    const originalText = takePhotoBtn.innerHTML;
+                    takePhotoBtn.disabled = true;
+                    takePhotoBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyse...';
 
                     try {
                         const res = await fetch(window.APP_CONFIG.tutorImageAnalysisUrl, {
@@ -968,14 +973,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.APP_CONFIG.csrfToken },
                             body: JSON.stringify({ image: capturedImageBase64 }) // Pas de document_url pour une nouvelle photo
                         });
-                        removeLoadingIndicator();
                         if (!res.ok) throw new Error('Erreur lors de l\'analyse de l\'image.');
                         // Recharger la page pour afficher la nouvelle session démarrée avec l'image
                         window.location.reload();
                     } catch (error) {
                         console.error("Erreur lors de l'analyse de l'image capturée :", error);
-                        removeLoadingIndicator();
-                        appendMessage({ role: 'assistant', content: [{"type": "text", "text": "Une erreur est survenue lors de l'analyse de l'image. Veuillez réessayer."}] });
+                        alert("Une erreur est survenue lors de l'analyse de l'image. Veuillez réessayer.");
+                        takePhotoBtn.disabled = false;
+                        takePhotoBtn.innerHTML = originalText;
                     }
                 };
                 reader.readAsDataURL(file);
