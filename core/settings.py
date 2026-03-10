@@ -38,7 +38,8 @@ ALLOWED_HOSTS = [
     '172.20.10.9', 
     'nathanptech.pythonanywhere.com',
     'www.catalyst-teaching.com',
-    'catalyst-teaching.com'
+    'catalyst-teaching.com',
+    '.eu.pythonanywhere.com'  # Important pour que le site marche sur le serveur EU
 ]
 
 # Add external hostnames from environment variable (comma separated)

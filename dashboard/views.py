@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.views.generic import View, TemplateView, DetailView
+from django.views.generic import View, TemplateView, DetailView, FormView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.template.loader import render_to_string
 from django.utils.decorators import method_decorator
@@ -11,7 +11,7 @@ from django.db.models import Q, Avg, Count, Prefetch
 from django.contrib.auth.models import Group
 import json
 from django.contrib.auth import get_user_model
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from openai import OpenAI
 from collections import defaultdict
 from tutor.models import ChatSession, ChatMessage

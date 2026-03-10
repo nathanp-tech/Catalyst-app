@@ -19,7 +19,7 @@ from django.contrib import admin
 from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
-from .views import HomeView, SettingsView
+from .views import HomeView, SettingsView, BulkCreateStudentsView
 
 urlpatterns = [
     path("", HomeView.as_view(), name="home"),
@@ -33,6 +33,9 @@ urlpatterns = [
     # Authentication URLs (login, logout, signup)
     # Prefixed with "accounts/" by convention
     path("accounts/", include("users.urls")),
+
+    # API
+    path('api/students/bulk-create/', BulkCreateStudentsView.as_view(), name='student-bulk-create'),
 ]
 
 # Serve media files in development mode
