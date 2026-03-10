@@ -119,12 +119,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 200);
         }
         if (sessionData.exercise_document) {
-            const documentUrl = sessionData.exercise_document.url;
-            if (documentUrl.toLowerCase().endsWith('.pdf')) {
-                await loadPdfAsImage(documentUrl, 1); // Load the first page
+            const doc = sessionData.exercise_document;
+            const isPdf = (doc.type === 'pdf') || (!doc.type && doc.url.toLowerCase().endsWith('.pdf'));
+            
+            if (isPdf) {
+                await loadPdfAsImage(doc.url, 1); // Load the first page
             } else {
                 // Si ce n'est pas un PDF, on suppose que c'est une image (ou base64)
-                if (questionImageDisplay) questionImageDisplay.src = documentUrl;
+                if (questionImageDisplay) {
+                    questionImageDisplay.src = doc.url;
+                    questionImageDisplay.style.display = 'block';
+                }
             }
             if (sendBtn) sendBtn.disabled = false;
 
