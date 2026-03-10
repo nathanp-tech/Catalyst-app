@@ -47,18 +47,15 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR("Format JSON invalide."))
                 return
 
-        class_id = data.get('class_id')
         student_data = data.get('students', [])
 
-        if not class_id or not student_data:
-            self.stdout.write(self.style.ERROR("Le JSON doit contenir 'class_id' et une liste 'students' d'objets avec une clé 'username'."))
+        if not student_data:
+            self.stdout.write(self.style.ERROR("Le JSON doit contenir une liste 'students' d'objets avec une clé 'username'."))
             return
 
-        try:
-            target_class = Group.objects.get(id=class_id)
-        except Group.DoesNotExist:
-            self.stdout.write(self.style.ERROR(f"Classe avec l'ID {class_id} introuvable."))
-            return
+        # Récupération ou création des groupes "11VP" et "Eleves"
+        target_class, _ = Group.objects.get_or_create(name="11VP")
+        eleves_group, _ = Group.objects.get_or_create(name="Eleves")
 
         User = get_user_model()
         
@@ -89,75 +86,85 @@ class Command(BaseCommand):
             # Création User
             user = User.objects.create_user(username=username, password=password)
             user.groups.add(target_class)
+            user.groups.add(eleves_group)
             self.stdout.write(f"  [OK] Utilisateur créé : {username}")
 
-            # --- Génération PDF sur une seule page ---
+            # --- Génération PDF sur une seule page (Colonne unique) ---
             
-            # En-tête commun
+            # En-tête
             c.setFont("Helvetica-Bold", 20)
-            c.drawCentredString(width / 2, height - 2.5 * cm, "Bienvenue sur Catalyst !")
-            c.setFont("Helvetica", 14)
-            c.drawCentredString(width / 2, height - 3.5 * cm, f"Classe : {target_class.name}")
+            c.drawCentredString(width / 2, height - 2.5 * cm, "Guide d'utilisation de Catalyst-teaching")
+            
+            # Ligne de séparation
             c.setStrokeColorRGB(0.8, 0.8, 0.8)
-            c.line(2 * cm, height - 4.2 * cm, width - 2 * cm, height - 4.2 * cm) # Ligne horizontale
+            c.line(2 * cm, height - 3.5 * cm, width - 2 * cm, height - 3.5 * cm)
 
-            # --- Partie gauche : Accès ---
-            left_col_x = 3 * cm
+            # Section 1: Identifiants
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(2.5 * cm, height - 5 * cm, "1. Tes identifiants de connexion")
             
-            c.setFont("Helvetica-Bold", 16)
-            c.drawString(left_col_x, height - 6 * cm, "Tes informations de connexion")
+            # Cadre pour les identifiants
+            c.setStrokeColorRGB(0.2, 0.2, 0.2)
+            c.rect(2.5 * cm, height - 7.5 * cm, width - 5 * cm, 2 * cm)
+            
             c.setFont("Helvetica", 12)
-            c.drawString(left_col_x, height - 7.5 * cm, f"Identifiant : {username}")
-            c.drawString(left_col_x, height - 8.5 * cm, f"Mot de passe : {password}")
+            c.drawString(3.5 * cm, height - 6.2 * cm, f"Identifiant : {username}")
+            c.drawString(3.5 * cm, height - 6.9 * cm, f"Mot de passe : {password}")
 
-            # --- Partie droite : Guide de démarrage ---
-            right_col_x = width / 2 + 0.5 * cm
+            # Section 2: Guide (Colonne unique)
+            text_y_start = height - 9 * cm
+            text = c.beginText(2.5 * cm, text_y_start)
+            text.setFont("Helvetica-Bold", 14)
+            text.textLine("2. Comment utiliser l'application ?")
+            text.moveCursor(0, 15)
+
+            text.setFont("Helvetica-Bold", 12)
+            text.textLine("Étape 1 : Choisir un exercice")
+            text.setFont("Helvetica", 11)
+            text.setLeading(14)
+            text.textLine("Une fois connecté, tu arrives sur ton tableau de bord.")
+            text.textLine("Tu y trouveras la liste des chapitres et des exercices disponibles.")
+            text.textLine("Clique sur un exercice pour démarrer une session avec le tuteur IA.")
+            text.moveCursor(0, 10)
+
+            text.setFont("Helvetica-Bold", 12)
+            text.textLine("Étape 2 : Discuter avec l'IA")
+            text.setFont("Helvetica", 11)
+            text.textLine("L'IA est là pour t'aider à réfléchir, pas pour te donner la réponse.")
+            text.textLine("Utilise le chat pour proposer tes calculs, tes idées ou poser des questions.")
+            text.textLine("Si tu es bloqué, demande un indice. L'IA te guidera étape par étape.")
+            text.moveCursor(0, 10)
+
+            text.setFont("Helvetica-Bold", 12)
+            text.textLine("Étape 3 : Terminer la session")
+            text.setFont("Helvetica", 11)
+            text.textLine("Quand tu as fini l'exercice ou si tu dois t'arrêter, clique sur le bouton")
+            text.textLine("'Terminer la session' (en haut ou en bas de l'écran).")
+            text.textLine("C'est essentiel pour sauvegarder ta progression.")
+            text.moveCursor(0, 10)
             
-            c.setFont("Helvetica-Bold", 16)
-            c.drawString(right_col_x, height - 6 * cm, "Guide de Démarrage")
-
-            text = c.beginText(right_col_x, height - 7.5 * cm)
             text.setFont("Helvetica-Bold", 12)
-            text.setLeading(16)
-            text.textLine("1. Choisir un exercice")
-            text.setFont("Helvetica", 10)
-            text.textLine("   Connecte-toi, choisis un chapitre, puis")
-            text.textLine("   clique sur un exercice pour commencer.")
-            text.textLine("")
-
-            text.setFont("Helvetica-Bold", 12)
-            text.textLine("2. Discuter avec l'IA")
-            text.setFont("Helvetica", 10)
-            text.textLine("   L'IA est ton tuteur personnel. Elle te")
-            text.textLine("   guide pas à pas. N'hésite pas à lui")
-            text.textLine("   montrer ton travail sur le brouillon.")
-            text.textLine("")
-
-            text.setFont("Helvetica-Bold", 12)
-            text.textLine("3. Terminer la session")
-            text.setFont("Helvetica", 10)
-            text.textLine("   Quand tu as fini, clique sur le bouton")
-            text.textLine("   'Terminer la session'.")
-            text.textLine("")
+            text.textLine("Étape 4 : Questionnaire")
+            text.setFont("Helvetica", 11)
+            text.textLine("Après quelques sessions, un questionnaire de satisfaction apparaîtra.")
+            text.textLine("Merci de le remplir pour nous aider à améliorer Catalyst.")
             
-            text.setFont("Helvetica-Bold", 12)
-            text.textLine("4. Donner ton avis (Important !)")
-            text.setFont("Helvetica", 10)
-            text.textLine("   Après quelques sessions, un questionnaire")
-            text.textLine("   apparaîtra. Tes réponses sont cruciales")
-            text.textLine("   pour améliorer l'outil.")
             c.drawText(text)
 
-            # --- QR Code en bas au centre ---
+            # QR Code en bas
+            qr_size = 4 * cm
+            qr_y = 2 * cm
+            
             qr = qrcode.make(base_url)
             qr_buffer = io.BytesIO()
             qr.save(qr_buffer, format='PNG')
             qr_buffer.seek(0)
-            qr_size = 6 * cm
-            c.drawImage(ImageReader(qr_buffer), (width - qr_size) / 2, 3 * cm, width=qr_size, height=qr_size)
+            
+            c.drawImage(ImageReader(qr_buffer), (width - qr_size) / 2, qr_y, width=qr_size, height=qr_size)
+            
             c.setFont("Helvetica", 10)
-            c.drawCentredString(width / 2, 2.5 * cm, "Scanne ce code pour accéder au site")
-            c.drawCentredString(width / 2, 2 * cm, base_url)
+            c.drawCentredString(width / 2, qr_y - 0.5 * cm, "Scanne ce code pour accéder au site")
+            c.drawCentredString(width / 2, qr_y - 1.0 * cm, base_url)
 
             c.showPage() # Terminer la page pour cet élève
 

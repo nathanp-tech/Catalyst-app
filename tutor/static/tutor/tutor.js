@@ -315,7 +315,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (colorMenuBtn) {
             colorMenuBtn.style.backgroundColor = whiteboardState.color;
         }
-        sizeSlider.value = whiteboardState.penSize;
+        if (sizeSlider) {
+            sizeSlider.value = whiteboardState.penSize;
+        }
         setTool(whiteboardState.tool);
         
         fabricCanvas.on('mouse:down', () => { document.body.classList.add('drawing-active'); });
@@ -385,11 +387,11 @@ document.addEventListener('DOMContentLoaded', () => {
         thicknessIcon.className = tool === 'pen' ? 'fas fa-pen-nib' : 'fas fa-eraser';
         
         if (tool === TOOLS.PEN) {
-            sizeSlider.value = whiteboardState.penSize;
+            if (sizeSlider) sizeSlider.value = whiteboardState.penSize;
             setColor(whiteboardState.color);
             setSize(whiteboardState.penSize);
         } else if (tool === TOOLS.ERASER) {
-            sizeSlider.value = whiteboardState.eraserSize;
+            if (sizeSlider) sizeSlider.value = whiteboardState.eraserSize;
             fabricCanvas.freeDrawingBrush.color = '#FFFFFF';
             setSize(whiteboardState.eraserSize);
         }
