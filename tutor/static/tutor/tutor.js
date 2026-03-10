@@ -38,6 +38,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const workspacePanel = document.querySelector('.workspace-panel');
     const toggleWhiteboardSizeBtn = document.getElementById('toggleWhiteboardSizeBtn');
     const questionFullscreenBtn = document.getElementById('questionFullscreenBtn');
+    const takePhotoBtn = document.getElementById('takePhotoBtn'); // Nouveau bouton pour prendre une photo
+    const cameraInput = document.getElementById('cameraInput'); // Input caché pour la caméra
     
     // --- CONSTANTS ---
     const TOOLS = {
@@ -943,6 +945,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     applySplitRatio(5); // Agrandir : Question 5%, Whiteboard 95% (Max)
                     toggleWhiteboardSizeBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Réduire';
                 }
+            });
+        }
+
+        // Gérer la prise de photo pour démarrer un exercice
+        if (takePhotoBtn && cameraInput) {
+            takePhotoBtn.addEventListener('click', () => cameraInput.click());
+            cameraInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    const capturedImageBase64 = event.target.result.split(',')[1]; // Récupérer la partie base64
+                    displayLoadingIndicator();
+                    const loadingText = chatbox.querySelector('.loading-indicator span');
+                    if (loadingText) loadingText.textContent = "Analyse de l'image...";
+
+                    try {
+                        const res = await fetch(window.APP_CONFIG.tutorImageAnalysisUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.APP_CONFIG.csrfToken },
+                            body: JSON.stringify({ image: capturedImageBase64 }) // Pas de document_url pour une nouvelle photo
+                        });
+                        removeLoadingIndicator();
+                        if (!res.ok) throw new Error('Erreur lors de l\'analyse de l\'image.');
+                        // Recharger la page pour afficher la nouvelle session démarrée avec l'image
+                        window.location.reload();
+                    } catch (error) {
+                        console.error("Erreur lors de l'analyse de l'image capturée :", error);
+                        removeLoadingIndicator();
+                        appendMessage({ role: 'assistant', content: [{"type": "text", "text": "Une erreur est survenue lors de l'analyse de l'image. Veuillez réessayer."}] });
+                    }
+                };
+                reader.readAsDataURL(file);
             });
         }
     }

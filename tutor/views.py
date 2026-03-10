@@ -208,7 +208,7 @@ class TutorImageAnalysisView(OpenAIAPIView):
         if not image_base64:
             return Response({"error": "No image provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-        document = Document.objects.filter(file=document_url.replace('/media/', '')).first()
+        document = Document.objects.filter(file=document_url.replace('/media/', '')).first() if document_url else None
 
         try:
             extraction_prompt = {
