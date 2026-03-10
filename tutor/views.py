@@ -1,5 +1,7 @@
 # tutor/views.py
 
+import io
+import base64
 import threading
 import os
 import json
@@ -71,14 +73,20 @@ class TutorPageView(TemplateView):
                 context['ongoing_session'] = True
                 context['chat_history_json'] = json.dumps(chat_history, cls=DjangoJSONEncoder)
                 if session.document:
+                    file_ext = session.document.file.name.split('.')[-1].lower()
+                    doc_type = 'pdf' if file_ext == 'pdf' else 'image'
                     context['exercise_document_json'] = json.dumps({
                         'title': session.document.title,
-                        'url': session.document.file.url
+                        'url': session.document.file.url,
+                        'type': doc_type
                     })
                 elif self.request.session.get('current_exercise_image'):
+                    data_uri = self.request.session.get('current_exercise_image')
+                    doc_type = 'pdf' if 'application/pdf' in data_uri else 'image'
                     context['exercise_document_json'] = json.dumps({
                         'title': "Exercice importé",
-                        'url': self.request.session.get('current_exercise_image')
+                        'url': data_uri,
+                        'type': doc_type
                     })
                 if session.whiteboard_state:
                     context['whiteboard_state_json'] = json.dumps(session.whiteboard_state)
@@ -128,6 +136,16 @@ class StartSessionView(LoginRequiredMixin, View):
                 solution_context = extracted
             else:
                 solution_context = f"The solution for the exercise '{solution_doc.title}' is available."
+        
+        # Attempt to extract text if it's a PDF to populate question_context immediately
+        if document.file and document.file.name.lower().endswith('.pdf'):
+            try:
+                pdf_text = extract_pdf_text(document.file)
+                if pdf_text.strip():
+                    question_context = pdf_text
+            except Exception:
+                pass # Fallback to title if extraction fails
+
         chat_session = ChatSession.objects.create(
             student=request.user,
             document=document,
@@ -156,30 +174,78 @@ class InitializeSessionView(APIView):
         
         # 1. Generate Solution if needed
         if session.solution_context == "PENDING_GENERATION":
-            exercise_content = f"Titre : {session.document.title}"
-            extracted_text = extract_pdf_text(session.document.file)
-            if extracted_text.strip():
-                exercise_content += f"\n\nContenu de l'exercice (extrait du PDF) :\n{extracted_text}"
+            file_ext = session.document.file.name.split('.')[-1].lower() if session.document.file else ''
             
-            solve_prompt = {
-                "role": "system",
-                "content": "Tu es un professeur de mathématiques expert. Résous l'exercice suivant de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape. Fournis toutes les équations, les calculs intermédiaires et les justifications logiques. Cette résolution servira de correction de référence absolue."
-            }
-            try:
-                generated_solution = generate_ai_response(
-                    messages=[solve_prompt, {"role": "user", "content": exercise_content}],
-                    model_name=AppConfig.get_active_model(),
-                    temperature=0.2
-                )
-                session.solution_context = generated_solution
-                session.save(update_fields=['solution_context'])
+            # CASE 1: IMAGE (PNG, JPG, ETC.)
+            if file_ext in ['jpg', 'jpeg', 'png', 'webp']:
+                try:
+                    # Encode image to base64
+                    with session.document.file.open('rb') as image_file:
+                        image_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+                    
+                    extraction_prompt = {
+                        "role": "system",
+                        "content": "Tu es un expert en mathématiques. 1) Extrait l'énoncé complet et exact de l'image. 2) Résous l'exercice toi-même de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape. Renvoie UNIQUEMENT un objet JSON avec les clés 'question' (l'énoncé) et 'solution' (ta correction détaillée)."
+                    }
+                    user_content = [
+                        {"type": "text", "text": "Analyse cette image pour l'élève."},
+                        {"type": "image_url", "image_url": {"url": f"data:image/{file_ext};base64,{image_base64}"}}
+                    ]
+                    
+                    response_text = generate_ai_response(
+                        messages=[extraction_prompt, {"role": "user", "content": user_content}],
+                        model_name=AppConfig.get_active_model(),
+                        response_format={"type": "json_object"}
+                    )
+                    
+                    data = json.loads(response_text)
+                    
+                    # Update session with extracted data
+                    session.question_context = data.get('question', session.question_context)
+                    session.solution_context = data.get('solution', "Solution non générée.")
+                    session.save(update_fields=['question_context', 'solution_context'])
+
+                except Exception as e:
+                    print(f"Error processing image document: {e}")
+                    session.solution_context = "Erreur lors de l'analyse de l'image."
+                    session.save(update_fields=['solution_context'])
+            
+            # CASE 2: PDF / TEXT
+            else:
+                exercise_content = f"Titre : {session.document.title}"
+                # If question_context was already populated in StartSessionView (PDF), use it
+                if len(session.question_context) > len(session.document.title) + 20:
+                     exercise_content += f"\n\nÉnoncé :\n{session.question_context}"
+                else:
+                    # Fallback extraction
+                    extracted_text = extract_pdf_text(session.document.file)
+                    if extracted_text.strip():
+                        exercise_content += f"\n\nContenu de l'exercice (extrait du PDF) :\n{extracted_text}"
+                        # Also update question context if it was empty
+                        session.question_context = extracted_text
+                        session.save(update_fields=['question_context'])
                 
+                solve_prompt = {
+                    "role": "system",
+                    "content": "Tu es un professeur de mathématiques expert. Résous l'exercice suivant de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape. Fournis toutes les équations, les calculs intermédiaires et les justifications logiques. Cette résolution servira de correction de référence absolue."
+                }
+                try:
+                    generated_solution = generate_ai_response(
+                        messages=[solve_prompt, {"role": "user", "content": exercise_content}],
+                        model_name=AppConfig.get_active_model(),
+                        temperature=0.2
+                    )
+                    session.solution_context = generated_solution
+                    session.save(update_fields=['solution_context'])
+                except Exception as e:
+                    print(f"Error generating solution: {e}")
+
+            # Refresh session cache
+            if 'exercise_context' in request.session:
+                request.session['exercise_context']['question'] = session.question_context
+                request.session['exercise_context']['solution'] = session.solution_context
                 # Update session cache so subsequent requests use the generated solution
-                if 'exercise_context' in request.session:
-                    request.session['exercise_context']['solution'] = generated_solution
-                    request.session.modified = True
-            except Exception as e:
-                print(f"Error generating solution: {e}")
+                request.session.modified = True
         
         # 2. Generate Welcome Message if needed
         initial_history = []
@@ -209,21 +275,50 @@ class TutorImageAnalysisView(OpenAIAPIView):
     """
     def post(self, request, *args, **kwargs):
         document_url = request.data.get('document_url')
-        image_base64 = request.data.get('image')
-        if not image_base64:
+        file_data = request.data.get('image')
+        if not file_data:
             return Response({"error": "No image provided."}, status=status.HTTP_400_BAD_REQUEST)
 
         document = Document.objects.filter(file=document_url.replace('/media/', '')).first() if document_url else None
 
         try:
-            extraction_prompt = {
-                "role": "system",
-                "content": "Tu es un expert en mathématiques. 1) Extrait l'énoncé complet et exact de l'image. 2) Résous l'exercice toi-même de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape, en incluant tous les calculs et raisonnements logiques. Renvoie UNIQUEMENT un objet JSON avec les clés 'question' (l'énoncé) et 'solution' (ta correction détaillée pas à pas)."
-            }
-            user_content = [
-                {"type": "text", "text": "Analyse cette image, extrais l'énoncé complet puis rédige la correction détaillée étape par étape."},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
-            ]
+            # Detect PDF vs Image and normalize file_data to Data URI
+            is_pdf = False
+            if 'application/pdf' in file_data:
+                is_pdf = True
+            elif file_data.startswith('JVBER'):
+                is_pdf = True
+                file_data = f"data:application/pdf;base64,{file_data}"
+            elif not file_data.startswith('data:'):
+                file_data = f"data:image/png;base64,{file_data}"
+
+            if is_pdf:
+                # Handle PDF
+                header, encoded = file_data.split(',', 1)
+                pdf_bytes = base64.b64decode(encoded)
+                text = ""
+                with io.BytesIO(pdf_bytes) as f:
+                    reader = PdfReader(f)
+                    for page in reader.pages:
+                        extracted = page.extract_text()
+                        if extracted:
+                            text += extracted + "\n"
+                
+                extraction_prompt = {
+                    "role": "system",
+                    "content": "Tu es un expert en mathématiques. 1) Extrait l'énoncé complet et exact du texte. 2) Résous l'exercice toi-même de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape. Renvoie UNIQUEMENT un objet JSON avec les clés 'question' (l'énoncé) et 'solution' (ta correction détaillée pas à pas)."
+                }
+                user_content = f"Voici l'énoncé de l'exercice (extrait du PDF) :\n{text}"
+            else:
+                # Handle Image
+                extraction_prompt = {
+                    "role": "system",
+                    "content": "Tu es un expert en mathématiques. 1) Extrait l'énoncé complet et exact de l'image. 2) Résous l'exercice toi-même de manière EXTRÊMEMENT DÉTAILLÉE, étape par étape, en incluant tous les calculs et raisonnements logiques. Renvoie UNIQUEMENT un objet JSON avec les clés 'question' (l'énoncé) et 'solution' (ta correction détaillée pas à pas)."
+                }
+                user_content = [
+                    {"type": "text", "text": "Analyse cette image, extrais l'énoncé complet puis rédige la correction détaillée étape par étape."},
+                    {"type": "image_url", "image_url": {"url": file_data}}
+                ]
             
             extraction_response_text = generate_ai_response(
                 messages=[extraction_prompt, {"role": "user", "content": user_content}],
@@ -247,8 +342,8 @@ class TutorImageAnalysisView(OpenAIAPIView):
             request.session['chat_session_id'] = chat_session.id
             request.session['exercise_context'] = {'question': question, 'solution': solution}
             
-            if not document_url and image_base64:
-                request.session['current_exercise_image'] = f"data:image/png;base64,{image_base64}"
+            if not document_url and file_data:
+                request.session['current_exercise_image'] = file_data
             else:
                 request.session.pop('current_exercise_image', None)
 
