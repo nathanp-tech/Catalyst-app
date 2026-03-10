@@ -1,10 +1,27 @@
 {
-    "class_id": 1,
     "students": [
-        {"username": "jdupont"},
-        {"username": "mcurie"},
-        {"username": "aeinstein"},
-        {"username": "inewton"},
-        {"username": "galilee"}
+        {"username": "adam"},
+        {"username": "fanny"},
+        {"username": "wayan"},
+        {"username": "roxane"},
+        {"username": "kayla"},
+        {"username": "naia"},
+        {"username": "lila"},
+        {"username": "olivia"},
+        {"username": "koré"},
+        {"username": "anais"},
+        {"username": "celya"},
+        {"username": "jeremie"},
+        {"username": "ilaria"},
+        {"username": "samuel"},
+        {"username": "ainoa"},
+        {"username": "maelyne"},
+        {"username": "amaia"},
+        {"username": "eliot"},
+        {"username": "kiara"},
+        {"username": "sam"},
+        {"username": "matthieu"},
+        {"username": "kelia"},
+        {"username": "maria"}
     ]
 }
