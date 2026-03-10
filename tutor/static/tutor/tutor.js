@@ -20,7 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectTool = document.getElementById('selectTool');
     const undoBtn = document.getElementById('undoBtn');
     const redoBtn = document.getElementById('redoBtn');
-    const colorPicker = document.getElementById('colorPicker');
+    const colorMenuBtn = document.getElementById('colorMenuBtn');
+    const colorPalette = document.getElementById('colorPalette');
     const sizeSlider = document.getElementById('sizeSlider');
     const restoreLastBtn = document.getElementById('restoreLastBtn');
     const clearCanvasBtn = document.getElementById('clearCanvasBtn');
@@ -216,6 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const whiteboardContainer = document.getElementById('whiteboardContainer');
 
+        // --- Mouse Events ---
         resizeHandle.addEventListener('mousedown', (e) => {
             e.preventDefault(); // Empêche la sélection de texte
             isResizingWorkspace = true;
@@ -251,6 +253,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 resizeCanvas(); // Ajustement final propre
             }
         });
+
+        // --- Touch Events (iPad/Mobile) ---
+        resizeHandle.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Empêche le scroll/zoom natif
+            isResizingWorkspace = true;
+            resizeHandle.classList.add('active');
+            whiteboardContainer.style.pointerEvents = 'none';
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isResizingWorkspace) return;
+            if (e.cancelable) e.preventDefault(); // Empêche le scroll de la page
+
+            const containerRect = workspacePanel.getBoundingClientRect();
+            const touch = e.touches[0];
+            let relativeY = touch.clientY - containerRect.top;
+            
+            let percentage = (relativeY / containerRect.height) * 100;
+            percentage = Math.max(0, Math.min(90, percentage));
+
+            applySplitRatio(percentage);
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            if (isResizingWorkspace) {
+                isResizingWorkspace = false;
+                resizeHandle.classList.remove('active');
+                whiteboardContainer.style.pointerEvents = '';
+                resizeCanvas();
+            }
+        });
     }
 
     function applySplitRatio(percentage) {
@@ -279,7 +312,9 @@ document.addEventListener('DOMContentLoaded', () => {
             backgroundColor: 'white',
         });
         
-        colorPicker.value = whiteboardState.color;
+        if (colorMenuBtn) {
+            colorMenuBtn.style.backgroundColor = whiteboardState.color;
+        }
         sizeSlider.value = whiteboardState.penSize;
         setTool(whiteboardState.tool);
         
@@ -363,6 +398,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function setColor(color) {
         if (!fabricCanvas) return;
         whiteboardState.color = color;
+        if (colorMenuBtn) {
+            colorMenuBtn.style.backgroundColor = color;
+        }
         if (whiteboardState.tool !== TOOLS.PEN) {
             setTool(TOOLS.PEN);
         } else {
@@ -843,7 +881,27 @@ document.addEventListener('DOMContentLoaded', () => {
         if (undoBtn) undoBtn.addEventListener('click', undo);
         if (redoBtn) redoBtn.addEventListener('click', redo);
         if (restoreLastBtn) restoreLastBtn.addEventListener('click', restoreLastWhiteboard);
-        if (colorPicker) colorPicker.addEventListener('input', () => setColor(colorPicker.value));
+        
+        // Nouvelle logique pour le sélecteur de couleur personnalisé
+        if (colorMenuBtn && colorPalette) {
+            colorMenuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isVisible = colorPalette.style.display === 'grid';
+                colorPalette.style.display = isVisible ? 'none' : 'grid';
+            });
+            
+            document.querySelectorAll('.color-swatch').forEach(swatch => {
+                swatch.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    setColor(e.target.dataset.color);
+                    colorPalette.style.display = 'none';
+                });
+            });
+            
+            // Fermer la palette si on clique ailleurs
+            document.addEventListener('click', () => colorPalette.style.display = 'none');
+        }
+
         if (sizeSlider) sizeSlider.addEventListener('input', () => setSize(sizeSlider.value));
         if (clearCanvasBtn) clearCanvasBtn.addEventListener('click', clearCanvas);
         if (fullscreenBtn) fullscreenBtn.addEventListener('click', () => toggleFullscreen(whiteboardWorkspace));

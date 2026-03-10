@@ -18,6 +18,7 @@ from tutor.models import ChatSession, ChatMessage
 from .models import GroupConfiguration, SurveyResponse
 from core.models import AppConfig
 from core.ai_utils import generate_ai_response
+from pypdf import PdfReader
 
 
 def is_user_in_group(user, group_name):
@@ -384,6 +385,34 @@ class SessionChatContentView(LoginRequiredMixin, View):
             id=session_id
         )
         
+        # Prepare exercise content
+        exercise_content = {
+            'title': session.document.title if session.document else "Exercice",
+            'text': session.question_context,
+            'image_url': None
+        }
+
+        if session.document and session.document.file:
+            file_ext = session.document.file.name.split('.')[-1].lower()
+            if file_ext == 'pdf':
+                # If context is just the title or very short, try to extract full text from PDF
+                # This ensures we have the full exercise text for the PDF
+                if len(session.question_context.strip()) < 100 or session.question_context.strip().startswith("Exercice:"):
+                    try:
+                        with session.document.file.open('rb') as f:
+                            reader = PdfReader(f)
+                            text = ""
+                            for page in reader.pages:
+                                extracted = page.extract_text()
+                                if extracted:
+                                    text += extracted + "\n"
+                            if text.strip():
+                                exercise_content['text'] = text
+                    except Exception as e:
+                        print(f"Error extracting PDF text for PDF generation: {e}")
+            elif file_ext in ['jpg', 'jpeg', 'png', 'webp']:
+                exercise_content['image_url'] = session.document.file.url
+        
         # Prepare messages for the template
         formatted_messages = []
         for msg in session.messages.order_by('timestamp'):
@@ -418,9 +447,83 @@ class SessionChatContentView(LoginRequiredMixin, View):
         # Use a partial template to render only the chat
         html_content = render_to_string(
             'dashboard/partials/chat_content.html', 
-            {'session': session, 'chat_messages': formatted_messages, 'is_pdf_render': True}
+            {
+                'session': session, 
+                'chat_messages': formatted_messages, 
+                'is_pdf_render': True,
+                'exercise_content': exercise_content
+            }
         )
-        return JsonResponse({'html': html_content})
+
+        # Inject CSS styles for better PDF rendering
+        # This fixes overlapping equations and ensures proper page breaks
+        pdf_styles = """
+        <style>
+            .pdf-container {
+                font-family: 'Helvetica', 'Arial', sans-serif;
+                color: #333;
+                line-height: 1.6;
+                padding: 20px;
+            }
+            .pdf-header {
+                margin-bottom: 20px;
+                border-bottom: 2px solid #eee;
+                padding-bottom: 10px;
+            }
+            .pdf-exercise-context {
+                background-color: #f9f9f9;
+                padding: 15px;
+                border-radius: 5px;
+                margin-bottom: 20px;
+                page-break-inside: avoid;
+                border: 1px solid #eee;
+            }
+            .message {
+                margin-bottom: 15px;
+                padding: 15px;
+                border-radius: 8px;
+                page-break-inside: avoid;
+            }
+            .message.user {
+                background-color: #e3f2fd;
+                border-left: 4px solid #2196f3;
+            }
+            .message.assistant {
+                background-color: #f1f8e9;
+                border-left: 4px solid #8bc34a;
+            }
+            .message-role {
+                font-weight: bold;
+                margin-bottom: 5px;
+                font-size: 0.9em;
+                color: #555;
+                text-transform: uppercase;
+            }
+            /* Fix for overlapping equations */
+            .katex-display {
+                margin: 1em 0;
+                overflow-x: hidden;
+                padding: 5px 0;
+            }
+            .katex {
+                line-height: 1.5;
+            }
+            p {
+                margin-bottom: 10px;
+            }
+            img {
+                max-width: 100%;
+                height: auto;
+                display: block;
+                margin: 10px 0;
+            }
+        </style>
+        <div class="pdf-container">
+        """
+        
+        final_html = pdf_styles + html_content + "</div>"
+
+        return JsonResponse({'html': final_html})
 
 
 @method_decorator(user_passes_test(is_teacher), name='dispatch')

@@ -206,6 +206,7 @@
             flex-direction: column;
             position: relative;
             border: 1px solid #eef2f7;
+            touch-action: none; /* Empêche les gestes système (swipe) sur le conteneur */
         }
 
         /* --- Resize Handle --- */
@@ -269,6 +270,7 @@
             background: white;
             overflow: hidden;
             cursor: crosshair;
+            touch-action: none; /* Empêche les gestes système sur le canvas */
         }
 
         /* Bouton d'agrandissement */
@@ -438,7 +440,18 @@
                 </div>
 
                 <div class="tool-group">
-                    <input type="color" id="colorPicker" value="#000000" title="Couleur" style="border:none; background:none; width: 30px; height: 30px; cursor: pointer;">
+                    <!-- Remplacement du sélecteur natif par une palette custom pour éviter la sortie du plein écran -->
+                    <div style="position: relative;">
+                        <button id="colorMenuBtn" title="Couleur" style="width: 30px; height: 30px; border-radius: 50%; border: 2px solid #e0e0e0; background-color: #000000; cursor: pointer; padding: 0;"></button>
+                        <div id="colorPalette" style="display: none; position: absolute; top: 40px; left: -10px; background: white; border: 1px solid #e0e0e0; padding: 8px; border-radius: 8px; grid-template-columns: repeat(3, 1fr); gap: 8px; z-index: 1000; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                            <div class="color-swatch" data-color="#000000" style="width: 24px; height: 24px; border-radius: 50%; background: #000000; cursor: pointer; border: 1px solid #ddd;"></div>
+                            <div class="color-swatch" data-color="#e74c3c" style="width: 24px; height: 24px; border-radius: 50%; background: #e74c3c; cursor: pointer; border: 1px solid #ddd;"></div>
+                            <div class="color-swatch" data-color="#3498db" style="width: 24px; height: 24px; border-radius: 50%; background: #3498db; cursor: pointer; border: 1px solid #ddd;"></div>
+                            <div class="color-swatch" data-color="#2ecc71" style="width: 24px; height: 24px; border-radius: 50%; background: #2ecc71; cursor: pointer; border: 1px solid #ddd;"></div>
+                            <div class="color-swatch" data-color="#f1c40f" style="width: 24px; height: 24px; border-radius: 50%; background: #f1c40f; cursor: pointer; border: 1px solid #ddd;"></div>
+                            <div class="color-swatch" data-color="#9b59b6" style="width: 24px; height: 24px; border-radius: 50%; background: #9b59b6; cursor: pointer; border: 1px solid #ddd;"></div>
+                        </div>
+                    </div>
                     <div style="display: flex; align-items: center; gap: 5px; margin-left: 5px;">
                         <i id="thickness-icon" class="fas fa-circle" style="font-size: 0.5rem; color: #ccc;"></i>
                         <input type="range" id="sizeSlider" min="1" max="50" value="5" style="width: 60px; cursor: pointer;">

@@ -78,7 +78,7 @@
         <p style="margin-bottom: 1.5rem; color: var(--text-muted);">L'IA m'a-t-elle aidé ?</p>
 
         <div class="likert-group">
-            <label class="likert-label">L'IA m'a aidé à comprendre mes erreurs dans le problème de modélisation.</label>
+            <label class="likert-label">L'IA m'a aidé à comprendre mes erreurs.</label>
             <div class="likert-options">
                 {% for i in "12345" %}
                 <label class="likert-option"><input type="radio" name="utility_errors" value="{{ i }}" required> {{ i }}</label>
@@ -106,7 +106,7 @@
         </div>
 
         <div class="likert-group">
-            <label class="likert-label">Je pense que l'IA m'a permis de mieux comprendre le chapitre sur les fonctions.</label>
+            <label class="likert-label">Je pense que l'IA m'a permis de mieux comprendre l'exercice.</label>
             <div class="likert-options">
                 {% for i in "12345" %}
                 <label class="likert-option"><input type="radio" name="utility_understanding" value="{{ i }}" required> {{ i }}</label>
