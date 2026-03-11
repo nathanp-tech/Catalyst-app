@@ -9,8 +9,10 @@ from datetime import timedelta
 from documents.models import Document, Category
 from django.db.models import Q, Avg, Count, Prefetch
 from django.contrib.auth.models import Group
+import csv
 import json
 from django.contrib.auth import get_user_model
+from django.utils.text import slugify
 from django.http import JsonResponse, HttpResponse
 from openai import OpenAI
 from collections import defaultdict
@@ -465,6 +467,19 @@ class SessionChatContentView(LoginRequiredMixin, View):
                 line-height: 1.6;
                 padding: 20px;
             }
+            @media print {
+                @page { margin: 1cm; size: A4; }
+                body, html {
+                    height: auto !important;
+                    overflow: visible !important;
+                    width: 100% !important;
+                }
+                .pdf-container {
+                    height: auto !important;
+                    overflow: visible !important;
+                    display: block !important;
+                }
+            }
             .pdf-header {
                 margin-bottom: 20px;
                 border-bottom: 2px solid #eee;
@@ -522,6 +537,45 @@ class SessionChatContentView(LoginRequiredMixin, View):
         """
         
         final_html = pdf_styles + html_content + "</div>"
+
+        if request.GET.get('download'):
+            # Génération du titre pour le nom du fichier PDF
+            # Format attendu : {username}_{group}_{doc_slug}_{date}_{time}_{id}_messages
+            username = session.student.username
+            
+            # Récupération du groupe (classe)
+            group_name = "sans-classe"
+            # On privilégie un groupe qui n'est pas "Eleves" (souvent le groupe de niveau/classe)
+            student_groups = session.student.groups.exclude(name="Eleves")
+            if student_groups.exists():
+                group_name = slugify(student_groups.first().name)
+            elif session.student.groups.exists():
+                group_name = slugify(session.student.groups.first().name)
+
+            doc_title = slugify(session.document.title if session.document else "exercice")
+            date_str = session.start_time.strftime('%Y-%m-%d_%H-%M')
+            
+            page_title = f"{username}_{group_name}_{doc_title}_{date_str}_{session.id}_messages"
+            
+            full_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>{page_title}</title>
+            </head>
+            <body>
+                {final_html}
+                <script>
+                    window.onload = function() {{
+                        // Petit délai pour s'assurer que les images/formules sont prêtes
+                        setTimeout(function() {{ window.print(); }}, 500);
+                    }};
+                </script>
+            </body>
+            </html>
+            """
+            return HttpResponse(full_html)
 
         return JsonResponse({'html': final_html})
 
@@ -896,6 +950,49 @@ class TeacherSurveyResultsView(LoginRequiredMixin, TemplateView):
     """
     template_name = "dashboard/survey_results.html"
 
+    def get(self, request, *args, **kwargs):
+        if request.GET.get('export') == 'csv':
+            return self.export_csv()
+        return super().get(request, *args, **kwargs)
+
+    def export_csv(self):
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="resultats_questionnaire.csv"'
+
+        writer = csv.writer(response)
+        # En-têtes du CSV
+        writer.writerow([
+            'Élève', 'Date',
+            'Utilité Erreurs', 'Utilité Indices', 'Utilité Correction', 'Utilité Compréhension',
+            'Facilité Questions', 'Facilité Savoir', 'Facilité Compréhension', 'Facilité Reformulation',
+            'Compétence Capacité', 'Compétence Confiance', 'Compétence Préférence', 'Compétence Nouvelles Façons',
+            'Relation Tuteur', 'Relation Confiance', 'Relation Intérêt',
+            'Difficulté (Ouvert)', 'Confusion (Ouvert)',
+            'Score Utilité', 'Score Facilité', 'Score Compétence', 'Score Relation'
+        ])
+
+        responses = SurveyResponse.objects.select_related('student').order_by('-created_at')
+        
+        for r in responses:
+            # Calcul des scores (logique identique à get_context_data)
+            score_utility = (r.utility_errors + r.utility_hints + r.utility_correction + r.utility_understanding) / 4
+            score_ease = (r.ease_asking + r.ease_knowing + r.ease_understanding + (6 - r.ease_reformulation)) / 4
+            score_competence = (r.competence_capability + r.competence_confidence + r.competence_preference + r.competence_new_ways) / 4
+            score_relation = (r.relation_tutor + r.relation_trust + r.relation_interest) / 3
+
+            writer.writerow([
+                r.student.username,
+                r.created_at.strftime('%d/%m/%Y %H:%M'),
+                r.utility_errors, r.utility_hints, r.utility_correction, r.utility_understanding,
+                r.ease_asking, r.ease_knowing, r.ease_understanding, r.ease_reformulation,
+                r.competence_capability, r.competence_confidence, r.competence_preference, r.competence_new_ways,
+                r.relation_tutor, r.relation_trust, r.relation_interest,
+                r.open_difficulty, r.open_confusion,
+                f"{score_utility:.2f}", f"{score_ease:.2f}", f"{score_competence:.2f}", f"{score_relation:.2f}"
+            ])
+        
+        return response
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
@@ -1013,3 +1110,11 @@ class TeacherSurveyResultsView(LoginRequiredMixin, TemplateView):
         context['responses'] = responses_list
         context['chart_data_json'] = json.dumps(chart_data)
         return context
+
+@method_decorator(user_passes_test(is_teacher), name='dispatch')
+class DeleteSurveyResponseView(LoginRequiredMixin, View):
+    """Permet au professeur de supprimer une réponse à un questionnaire."""
+    def post(self, request, response_id, *args, **kwargs):
+        response = get_object_or_404(SurveyResponse, id=response_id)
+        response.delete()
+        return redirect('dashboard:survey-results')

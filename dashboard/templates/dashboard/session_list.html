@@ -11,6 +11,7 @@
     <!-- Bibliothèques pour la génération de PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
     <style>
         .session-table {
             width: 100%;
@@ -298,6 +299,11 @@
             const renderContainer = document.getElementById('pdf-render-container');
             renderContainer.innerHTML = `<div id="chatbox">${data.html}</div>`;
 
+            // Rendu des formules mathématiques avec MathJax
+            if (window.MathJax) {
+                await MathJax.typesetPromise([renderContainer]);
+            }
+
             // Attendre que les images (si présentes) soient chargées
             const images = renderContainer.querySelectorAll('img');
             await Promise.all(Array.from(images).map(img => {
@@ -315,7 +321,8 @@
                 scale: 2,
                 useCORS: true,
                 allowTaint: true,
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
+                ignoreElements: (element) => element.tagName && element.tagName.toLowerCase() === 'mjx-assistive-mml'
             });
 
             // 4. Créer le PDF avec jsPDF

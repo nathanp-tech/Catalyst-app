@@ -365,6 +365,40 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('resize', debounce(resizeCanvas, 150));
         resizeCanvas();
         saveState(); // Save the initial empty state
+
+        // --- AJOUT BOUTON ENVOYER WHITEBOARD ---
+        if (canvasContainer && !document.getElementById('wbSendBtn')) {
+            const wbSendBtn = document.createElement('button');
+            wbSendBtn.id = 'wbSendBtn';
+            wbSendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+            wbSendBtn.title = "Envoyer au tuteur";
+            wbSendBtn.style.cssText = `
+                position: absolute;
+                bottom: 15px;
+                right: 15px;
+                width: 48px;
+                height: 48px;
+                border-radius: 50%;
+                background-color: #2ecc71;
+                color: white;
+                border: none;
+                cursor: pointer;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+                z-index: 900;
+                display: flex; align-items: center; justify-content: center;
+                font-size: 1.2rem;
+                transition: transform 0.2s, background-color 0.2s;
+            `;
+            wbSendBtn.onmouseover = () => { wbSendBtn.style.transform = 'scale(1.1)'; wbSendBtn.style.backgroundColor = '#27ae60'; };
+            wbSendBtn.onmouseout = () => { wbSendBtn.style.transform = 'scale(1)'; wbSendBtn.style.backgroundColor = '#2ecc71'; };
+            wbSendBtn.addEventListener('click', sendToTutor);
+            
+            // S'assurer que le parent est relatif pour le positionnement absolu
+            if (window.getComputedStyle(canvasContainer).position === 'static') {
+                canvasContainer.style.position = 'relative';
+            }
+            canvasContainer.appendChild(wbSendBtn);
+        }
     }
 
     function resizeCanvas() {
@@ -628,6 +662,9 @@ document.addEventListener('DOMContentLoaded', () => {
         lastSentWhiteboardState = fabricCanvas.toJSON(); // Store for potential restore
 
         sendBtn.disabled = true;
+        const wbSendBtn = document.getElementById('wbSendBtn');
+        if (wbSendBtn) wbSendBtn.disabled = true;
+
         let userMessageContent = [];
         if (textComment) userMessageContent.push({ type: 'text', text: textComment });
         if (preparedImage) userMessageContent.push({ 
@@ -677,6 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
             appendMessage(errorMsg);
         } finally {
             sendBtn.disabled = false;
+            if (wbSendBtn) wbSendBtn.disabled = false;
         }
     }
     

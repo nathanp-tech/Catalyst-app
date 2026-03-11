@@ -35,4 +35,5 @@ urlpatterns = [
     # URLs pour les questionnaires
     path('survey/', StudentSurveyView.as_view(), name='student-survey'),
     path('survey/results/', TeacherSurveyResultsView.as_view(), name='survey-results'),
+    path('survey/response/<int:response_id>/delete/', DeleteSurveyResponseView.as_view(), name='survey-response-delete'),
 ]

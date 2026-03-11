@@ -58,7 +58,10 @@
             <p><strong>Date:</strong> {{ session.start_time|date:"d F Y, H:i" }}</p>
             <div class="actions">
                 <a href="{% url 'dashboard:session-list' %}">&larr; Retour à la liste des sessions</a>
-                <button id="downloadPdfBtn" class="validate-btn" style="background-color: var(--secondary-color);"><i class="fas fa-file-pdf"></i> Télécharger en PDF</button>
+                <button id="downloadPdfBtn" class="validate-btn" style="background-color: var(--secondary-color);" 
+                    data-session-id="{{ session.id }}" 
+                    data-filename="{{ session.student.username }}_{{ session.student.groups.first.name|default:'SansClasse'|slugify }}_{{ session.document.title|default:'SansTitre'|slugify }}_{{ session.start_time|date:'Y-m-d_H-i' }}_{{ session.messages.count }}_messages">
+                    <i class="fas fa-file-pdf"></i> Télécharger en PDF</button>
             </div>
         </div>
 
@@ -103,6 +106,9 @@
     </div>
 </div>
 
+<!-- Conteneur temporaire pour le rendu du PDF (identique à la liste des sessions) -->
+<div id="pdf-render-container" style="position: absolute; left: -9999px; top: -9999px; width: 800px;"></div>
+
 <script>
     window.addEventListener('load', () => {
         // Pour le rendu correct des maths si MathJax est utilisé
@@ -112,44 +118,88 @@
 
         // --- Logique de téléchargement PDF ---
         const downloadBtn = document.getElementById('downloadPdfBtn');
-        const chatboxToCapture = document.getElementById('chatbox');
-        const summaryToCapture = document.querySelector('.session-summary');
-
+        
         downloadBtn.addEventListener('click', () => {
-            const originalBtnText = downloadBtn.innerHTML;
-            downloadBtn.innerHTML = `<div class="spinner" style="border-top-color: white; width: 16px; height: 16px;"></div> Génération...`;
-            downloadBtn.disabled = true;
-
-            // Utiliser html2canvas pour capturer le contenu du chat
-            html2canvas(chatboxToCapture, { 
-                scale: 2, // Augmenter l'échelle pour une meilleure qualité d'image
-                useCORS: true 
-            }).then(canvas => {
-                const imgData = canvas.toDataURL('image/png');
-                const { jsPDF } = window.jspdf;
-                
-                const pdf = new jsPDF({
-                    orientation: 'portrait',
-                    unit: 'mm',
-                    format: 'a4'
-                });
-
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-                const imgWidth = canvas.width;
-                const imgHeight = canvas.height;
-                const ratio = imgWidth / imgHeight;
-                
-                const imgHeightInPdf = pdfWidth / ratio;
-
-                pdf.text(`Conversation de: {{ session.student.username }} - {{ session.start_time|date:"d/m/Y" }}`, 10, 15);
-                pdf.addImage(imgData, 'PNG', 10, 25, pdfWidth - 20, imgHeightInPdf);
-                pdf.save(`conversation-{{ session.student.username|slugify }}-{{ session.id }}.pdf`);
-
-                downloadBtn.innerHTML = originalBtnText;
-                downloadBtn.disabled = false;
-            });
+            const { sessionId, filename } = downloadBtn.dataset;
+            downloadSessionPDF(downloadBtn, sessionId, filename);
         });
     });
+
+    async function downloadSessionPDF(btnElement, sessionId, filename) {
+        const originalContent = btnElement.innerHTML;
+        btnElement.innerHTML = `<div class="spinner" style="border-top-color: white; width: 16px; height: 16px; display: inline-block; vertical-align: middle; margin-right: 5px;"></div> Génération...`;
+        btnElement.disabled = true;
+
+        try {
+            // 1. Récupérer le contenu HTML du chat via l'API (comme dans la liste)
+            const response = await fetch(`/dashboard/api/sessions/${sessionId}/content/`);
+            if (!response.ok) {
+                throw new Error(`Erreur réseau: ${response.statusText}`);
+            }
+            const data = await response.json();
+
+            // 2. Placer ce contenu dans un conteneur temporaire
+            const renderContainer = document.getElementById('pdf-render-container');
+            renderContainer.innerHTML = `<div id="chatbox">${data.html}</div>`;
+
+            // Rendu des formules mathématiques avec MathJax
+            if (window.MathJax) {
+                await MathJax.typesetPromise([renderContainer]);
+            }
+
+            // Attendre que les images soient chargées
+            const images = renderContainer.querySelectorAll('img');
+            await Promise.all(Array.from(images).map(img => {
+                if (img.complete) return Promise.resolve();
+                return new Promise(resolve => { img.onload = img.onerror = resolve; });
+            }));
+            
+            const chatboxElement = renderContainer.querySelector('#chatbox');
+
+            // 3. Capturer avec html2canvas
+            const canvas = await html2canvas(chatboxElement, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                ignoreElements: (element) => element.tagName && element.tagName.toLowerCase() === 'mjx-assistive-mml'
+            });
+
+            // 4. Générer le PDF avec jsPDF
+            const imgData = canvas.toDataURL('image/png');
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+            
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            // Ajoute le contenu page par page
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft > 0) {
+                position -= pageHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            // 5. Sauvegarder
+            pdf.save(`${filename}.pdf`);
+
+        } catch (error) {
+            console.error("Erreur lors de la génération du PDF:", error);
+            alert("Une erreur est survenue lors de la création du PDF.");
+        } finally {
+            // 6. Nettoyer
+            document.getElementById('pdf-render-container').innerHTML = '';
+            btnElement.innerHTML = originalContent;
+            btnElement.disabled = false;
+        }
+    }
 </script>
 {% endblock %}

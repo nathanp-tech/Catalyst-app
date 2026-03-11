@@ -146,9 +146,14 @@
 {% endblock %}
 
 {% block content %}
-<div class="dashboard-header">
-    <h1><i class="fas fa-chart-pie"></i> Analyse des Retours Élèves</h1>
-    <p>Vue d'ensemble du ressenti de la classe.</p>
+<div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h1><i class="fas fa-chart-pie"></i> Analyse des Retours Élèves</h1>
+        <p>Vue d'ensemble du ressenti de la classe.</p>
+    </div>
+    <a href="?export=csv" class="validate-btn" style="background-color: #27ae60; text-decoration: none; color: white; display: inline-flex; align-items: center; gap: 8px;">
+        <i class="fas fa-file-csv"></i> Exporter CSV
+    </a>
 </div>
 
 <div class="tabs">
@@ -243,7 +248,7 @@
                 <th>Facilité</th>
                 <th>Compétence</th>
                 <th>Relation</th>
-                <th style="width: 50px; text-align: center;">Détails</th>
+                <th style="width: 100px; text-align: center;">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -255,10 +260,16 @@
                 <td><span class="score-badge {% if r.score_ease < 3 %}score-low{% elif r.score_ease >= 4 %}score-high{% else %}score-mid{% endif %}">{{ r.score_ease|floatformat:1 }}</span></td>
                 <td><span class="score-badge {% if r.score_competence < 3 %}score-low{% elif r.score_competence >= 4 %}score-high{% else %}score-mid{% endif %}">{{ r.score_competence|floatformat:1 }}</span></td>
                 <td><span class="score-badge {% if r.score_relation < 3 %}score-low{% elif r.score_relation >= 4 %}score-high{% else %}score-mid{% endif %}">{{ r.score_relation|floatformat:1 }}</span></td>
-                <td style="text-align: center;">
+                <td style="text-align: center; white-space: nowrap;">
                     <button class="expand-btn" onclick="toggleDetails('details-{{ r.id }}', this)" title="Voir le détail">
                         <i class="fas fa-chevron-down"></i>
                     </button>
+                    <form action="{% url 'dashboard:survey-response-delete' r.id %}" method="post" style="display:inline-block; margin-left: 8px;" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce questionnaire ?');">
+                        {% csrf_token %}
+                        <button type="submit" style="background: none; border: none; cursor: pointer; color: #e74c3c;" title="Supprimer">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </form>
                 </td>
             </tr>
             <tr id="details-{{ r.id }}" class="details-row" style="display: none;">
